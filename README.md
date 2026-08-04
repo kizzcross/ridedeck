@@ -146,14 +146,16 @@ armazena localmente via camada de *adapters* (`backend/apps/imports/adapters/`).
   Leva alguns minutos (rate-limited). Idempotente: rodar de novo só atualiza.
   Use `--series G,D,V` para incluir a série V, ou `--set <groupId>` para um set só.
 
-- **Nation / Clan (enriquecimento):** a TCGplayer não traz Nation/Clan. Um adapter
-  isolado (`apps/imports/adapters/fandom.py`) preenche esses campos a partir da API
-  pública do wiki Fandom (via *category membership*, não scraping de HTML), casando
-  por nome-base. Rode **após** o import do catálogo:
+- **Nation / Clan / Trigger (enriquecimento):** a TCGplayer não traz Nation/Clan
+  nem o subtipo de trigger. Um adapter isolado (`apps/imports/adapters/fandom.py`)
+  preenche esses campos a partir da API pública do wiki Fandom (via *category
+  membership*, não scraping de HTML), casando por nome-base. Rode **após** o import:
   ```bash
-  python manage.py enrich_clans
+  python manage.py enrich_clans      # Nation + Clan + Trigger (Critical/Draw/Heal/Front/Stand/Over)
+  python manage.py backfill_g_format # marca cartas G-era como legais no formato "G Era"
   ```
-  Cobre ~11k cartas com Nation e ~4.6k com Clan (D-era = só Nation; G-era = Clan+Nation).
+  Cobre ~11k cartas com Nation, ~4.6k com Clan e os triggers reais (heal/over não
+  aparecem no texto, por isso vêm do wiki).
 
 - **TCGCSV/TCGplayer:** via API admin (autenticado como Platform Admin):
   ```

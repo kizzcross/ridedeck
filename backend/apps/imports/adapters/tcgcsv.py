@@ -194,7 +194,7 @@ class TCGCSVAdapter(BaseAdapter):
         if s == "D":
             return ["standard", "premium"]
         if s == "G":
-            return ["premium"]
+            return ["g", "premium"]
         return ["premium"]
 
     def fetch_prices(self) -> list[PriceRecord]:
