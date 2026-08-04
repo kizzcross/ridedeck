@@ -34,6 +34,11 @@ class CollectionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(card__name__icontains=search)
+        # Filter by era via the set code prefix of the card's printings.
+        era = (self.request.query_params.get("era") or "").lower()
+        era_prefix = {"g": "g-", "d": "d", "v": "v-"}.get(era)
+        if era_prefix:
+            qs = qs.filter(card__printings__card_set__code__istartswith=era_prefix).distinct()
         return qs
 
     @action(detail=False, methods=["post"], url_path="set")

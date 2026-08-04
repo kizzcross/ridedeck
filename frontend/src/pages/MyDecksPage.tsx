@@ -93,6 +93,7 @@ export function MyDecksPage() {
               className="h-10 rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm">
               <option value="standard">Standard</option>
               <option value="v_premium">V Premium</option>
+              <option value="g">G Era</option>
               <option value="premium">Premium</option>
             </select>
           </label>

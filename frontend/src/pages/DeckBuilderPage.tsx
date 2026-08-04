@@ -30,8 +30,11 @@ const FORMAT_TARGETS: Record<string, Partial<Record<Zone, string>>> = {
   standard: { main_deck: "50", ride_deck: "5" },
   v_premium: { main_deck: "50" },
   premium: { main_deck: "50" },
+  g: { main_deck: "50" },
 };
-const FORMAT_LABEL: Record<string, string> = { standard: "Standard", v_premium: "V Premium", premium: "Premium" };
+const FORMAT_LABEL: Record<string, string> = {
+  standard: "Standard", v_premium: "V Premium", premium: "Premium", g: "G Era",
+};
 const SAVE_LABEL = { idle: "", saving: "Salvando…", saved: "Salvo", error: "Erro ao salvar" };
 const MOBILE_TABS = [
   { key: "cards", label: "Cartas", icon: Library },
@@ -180,6 +183,7 @@ export function DeckBuilderPage() {
             <option value="standard">Standard</option>
             <option value="v_premium">V Premium</option>
             <option value="premium">Premium</option>
+            <option value="g">G Era</option>
           </select>
           <select
             value={selectedBanlist ?? ""}
