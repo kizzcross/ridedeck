@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { GitFork, Globe, Lock, Link2, Pencil } from "lucide-react";
+import { GitFork, Globe, Lock, Link2, Pencil, Scale, Sparkles } from "lucide-react";
 import { decksApi } from "@/api/decks";
 import { Avatar } from "@/components/Avatar";
 import { CardArt } from "@/features/catalog/CardArt";
@@ -68,9 +68,21 @@ export function DeckViewPage() {
             </Link>
             {deck.description && <p className="mt-2 text-sm text-[var(--color-ink-muted)]">{deck.description}</p>}
           </div>
-          <Button variant="secondary" size="sm" loading={fork.isPending} onClick={() => fork.mutate()}>
-            <GitFork className="h-4 w-4" /> Copiar deck
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <a href={`/d/${uuid}`} target="_blank" rel="noreferrer">
+              <Button variant="ghost" size="sm"><Sparkles className="h-4 w-4" /> Página bonita</Button>
+            </a>
+            {deck.check_banlist_uuid && (
+              <Link to={`/app/banlists/${deck.check_banlist_uuid}`}>
+                <Button variant="ghost" size="sm">
+                  <Scale className="h-4 w-4" /> {deck.check_banlist_name ?? "Banlist"}
+                </Button>
+              </Link>
+            )}
+            <Button variant="secondary" size="sm" loading={fork.isPending} onClick={() => fork.mutate()}>
+              <GitFork className="h-4 w-4" /> Copiar deck
+            </Button>
+          </div>
         </div>
       </Panel>
 

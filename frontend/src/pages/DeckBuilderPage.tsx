@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3, Trash2 } from "lucide-react";
+import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3, Trash2, Share2 } from "lucide-react";
 import { decksApi, type Visibility, type Zone } from "@/api/decks";
 import { banlistsApi } from "@/api/banlists";
 import type { CardListItem } from "@/api/cards";
@@ -224,6 +224,11 @@ export function DeckBuilderPage() {
           <Badge tone={vis === "public" ? "success" : "neutral"} className="hidden sm:inline-flex">
             <VisIcon className="h-3 w-3" /> {vis}
           </Badge>
+          <a href={`/d/${uuid}`} target="_blank" rel="noreferrer" title="Ver página de compartilhamento">
+            <Button size="sm" variant="ghost" aria-label="Compartilhar deck">
+              <Share2 className="h-4 w-4" />
+            </Button>
+          </a>
           <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)} aria-label="Excluir deck" title="Excluir deck">
             <Trash2 className="h-4 w-4" />
           </Button>
