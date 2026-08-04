@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3 } from "lucide-react";
+import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3, Trash2 } from "lucide-react";
 import { decksApi, type Visibility, type Zone } from "@/api/decks";
 import { banlistsApi } from "@/api/banlists";
 import type { CardListItem } from "@/api/cards";
@@ -23,7 +23,8 @@ import { ShoppingList } from "@/features/builder/ShoppingList";
 import { DeckPowerPanel } from "@/features/builder/DeckPowerPanel";
 import { CardArt } from "@/features/catalog/CardArt";
 import { ZONES } from "@/features/builder/zones";
-import { Badge, Button, Panel, Skeleton, useToast } from "@/components/ui";
+import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
+import { useMutation } from "@tanstack/react-query";
 import { cn } from "@/lib/cn";
 
 const FORMAT_TARGETS: Record<string, Partial<Record<Zone, string>>> = {
@@ -45,11 +46,22 @@ type MobileTab = (typeof MOBILE_TABS)[number]["key"];
 
 export function DeckBuilderPage() {
   const { uuid = "" } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const qc = useQueryClient();
   const b = useDeckBuilder(uuid);
   const { ownedOf } = useOwnedMap();
   const [dragging, setDragging] = useState<CardListItem | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const del = useMutation({
+    mutationFn: () => decksApi.remove(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["decks"] });
+      toast.success("Deck excluído");
+      navigate("/app/decks");
+    },
+    onError: () => toast.error("Não foi possível excluir"),
+  });
   const [visibility, setVisibility] = useState<Visibility | null>(null);
   const [format, setFormat] = useState<string | null>(null);
   const [banlist, setBanlist] = useState<string | null | undefined>(undefined);
@@ -212,8 +224,20 @@ export function DeckBuilderPage() {
           <Badge tone={vis === "public" ? "success" : "neutral"} className="hidden sm:inline-flex">
             <VisIcon className="h-3 w-3" /> {vis}
           </Badge>
+          <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)} aria-label="Excluir deck" title="Excluir deck">
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        title="Excluir deck"
+        description={`"${b.deck.title}" será removido permanentemente.`}
+        loading={del.isPending}
+        onConfirm={() => del.mutate()}
+        onClose={() => setConfirmDelete(false)}
+      />
 
       {/* Mobile tab switcher */}
       <div className="mb-3 grid grid-cols-3 gap-1 lg:hidden">

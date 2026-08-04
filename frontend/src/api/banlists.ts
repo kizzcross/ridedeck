@@ -90,6 +90,9 @@ export const banlistsApi = {
     const { data } = await api.post<BanlistDetail>(`/banlists/${uuid}/fork/`);
     return data;
   },
+  async remove(uuid: string) {
+    await api.delete(`/banlists/${uuid}/`);
+  },
   async makeOfficial(uuid: string, official = true) {
     const { data } = await api.post<{ is_official: boolean }>(`/banlists/${uuid}/make-official/`, { official });
     return data;

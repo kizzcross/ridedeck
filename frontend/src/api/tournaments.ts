@@ -122,6 +122,9 @@ export const tournamentsApi = {
     const { data } = await api.post<TournamentDetail>("/tournaments/", payload);
     return data;
   },
+  async remove(uuid: string) {
+    await api.delete(`/tournaments/${uuid}/`);
+  },
   async update(uuid: string, payload: Record<string, unknown>) {
     const { data } = await api.patch<TournamentDetail>(`/tournaments/${uuid}/`, payload);
     return data;
