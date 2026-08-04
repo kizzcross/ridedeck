@@ -44,6 +44,10 @@ class Deck(BaseModel, SoftDeleteModel):
 
     cover_printing = models.ForeignKey("cards.CardPrinting", on_delete=models.SET_NULL,
                                        null=True, blank=True, related_name="+")
+    # Banlist the builder validates against (a checking context — does NOT change
+    # the deck's cards; switch it to compare the same deck across banlists).
+    check_banlist = models.ForeignKey("banlists.Banlist", on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name="+")
 
     forked_from = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name="forks")

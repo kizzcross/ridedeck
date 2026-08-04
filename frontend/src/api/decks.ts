@@ -62,6 +62,7 @@ export interface DeckDetail {
   like_count: number;
   favorite_count: number;
   forked_from: number | null;
+  check_banlist_uuid: string | null;
   current_version: DeckVersion;
   is_owner: boolean;
   created_at: string;

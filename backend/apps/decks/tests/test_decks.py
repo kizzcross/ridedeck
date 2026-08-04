@@ -104,6 +104,38 @@ def test_public_deck_visible_and_forkable(member, other_member, deck, cards):
     assert forked.current_version.entries.count() == 1  # copied entry
 
 
+def test_check_banlist_link_drives_validation(member, deck, cards):
+    """Selecting a banlist on the deck makes validate flag its banned cards —
+    without a query param, and without changing the deck's cards."""
+    from apps.banlists.choices import BanlistCategory, RestrictionType
+    from apps.banlists.models import Banlist, BanlistEntry, BanlistVersion
+
+    bl = Banlist.objects.create(name="B", category=BanlistCategory.COMMUNITY,
+                                format_code="standard")
+    bv = BanlistVersion.objects.create(banlist=bl, version=1)
+    bl.current_version = bv
+    bl.save()
+    BanlistEntry.objects.create(version=bv, restriction_type=RestrictionType.BANNED, card=cards[0])
+
+    c = client_for(member)
+    c.post(reverse("v1:deck-entry", args=[deck.uuid]),
+           {"card": str(cards[0].uuid), "zone": "main_deck", "quantity": 1}, format="json")
+
+    # No banlist selected → no BANNED error.
+    v0 = c.get(reverse("v1:deck-validate", args=[deck.uuid])).data
+    assert not any(e["code"] == "BANNED_CARD" for e in v0["errors"])
+
+    # Link the banlist to the deck, then validate again (no query param).
+    c.patch(reverse("v1:deck-detail", args=[deck.uuid]),
+            {"check_banlist_uuid": str(bl.uuid)}, format="json")
+    v1 = c.get(reverse("v1:deck-validate", args=[deck.uuid])).data
+    assert any(e["code"] == "BANNED_CARD" for e in v1["errors"])
+
+    # The restriction map exposes the banned card for the builder.
+    rm = c.get(reverse("v1:banlist-restriction-map", args=[bl.uuid])).data
+    assert rm["restrictions"][str(cards[0].uuid)]["type"] == "banned"
+
+
 def test_cannot_edit_others_deck(member, other_member, deck, cards):
     other = client_for(other_member)
     r = other.post(reverse("v1:deck-entry", args=[deck.uuid]),

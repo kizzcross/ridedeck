@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   DragOverlay,
@@ -12,6 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3 } from "lucide-react";
 import { decksApi, type Visibility, type Zone } from "@/api/decks";
+import { banlistsApi } from "@/api/banlists";
 import type { CardListItem } from "@/api/cards";
 import { useDeckBuilder } from "@/features/builder/useDeckBuilder";
 import { useOwnedMap } from "@/hooks/useOwnedMap";
@@ -48,6 +49,7 @@ export function DeckBuilderPage() {
   const [dragging, setDragging] = useState<CardListItem | null>(null);
   const [visibility, setVisibility] = useState<Visibility | null>(null);
   const [format, setFormat] = useState<string | null>(null);
+  const [banlist, setBanlist] = useState<string | null | undefined>(undefined);
   const [tab, setTab] = useState<MobileTab>("cards");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -55,12 +57,36 @@ export function DeckBuilderPage() {
     if (b.deck) {
       setVisibility((v) => v ?? b.deck!.visibility);
       setFormat((f) => f ?? b.deck!.format_code);
+      setBanlist((bl) => (bl === undefined ? b.deck!.check_banlist_uuid : bl));
     }
   }, [b.deck]);
 
   const vis = visibility ?? b.deck?.visibility ?? "private";
   const fmt = format ?? b.deck?.format_code ?? "standard";
+  const selectedBanlist = banlist ?? null;
   const targets = FORMAT_TARGETS[fmt] ?? {};
+
+  // Banlists selectable for this format (official + community).
+  const { data: banlistsData } = useQuery({
+    queryKey: ["banlists-for-format", fmt],
+    queryFn: () => banlistsApi.list({ format_code: fmt }),
+  });
+  const banlistOptions = banlistsData?.results ?? [];
+
+  // Restriction map for the selected banlist → mark banned/limited cards.
+  const { data: restrictions } = useQuery({
+    queryKey: ["banlist-restrictions", selectedBanlist],
+    queryFn: () => banlistsApi.restrictionMap(selectedBanlist!),
+    enabled: !!selectedBanlist,
+  });
+
+  const changeBanlist = async (uuidValue: string) => {
+    const value = uuidValue || null;
+    setBanlist(value);
+    await decksApi.update(uuid, { check_banlist_uuid: value });
+    qc.invalidateQueries({ queryKey: ["deck-validate", uuid] });
+    b.refetch();
+  };
 
   const onDragStart = (e: DragStartEvent) => setDragging((e.active.data.current?.card as CardListItem) ?? null);
   const onDragEnd = (e: DragEndEvent) => {
@@ -89,7 +115,7 @@ export function DeckBuilderPage() {
 
   const VisIcon = vis === "public" ? Globe : vis === "unlisted" ? Link2 : Lock;
 
-  const cardsPanel = <CardSearchPanel onAdd={b.add} formatCode={fmt} />;
+  const cardsPanel = <CardSearchPanel onAdd={b.add} formatCode={fmt} restrictions={restrictions} />;
   const deckPanel = (
     <div className="space-y-3">
       {ZONES.map((z) => (
@@ -154,6 +180,20 @@ export function DeckBuilderPage() {
             <option value="standard">Standard</option>
             <option value="v_premium">V Premium</option>
             <option value="premium">Premium</option>
+          </select>
+          <select
+            value={selectedBanlist ?? ""}
+            onChange={(e) => changeBanlist(e.target.value)}
+            className="h-8 max-w-[9rem] rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs"
+            aria-label="Banlist para validar"
+            title="Valide o deck contra uma banlist"
+          >
+            <option value="">Sem banlist</option>
+            {banlistOptions.map((bl) => (
+              <option key={bl.uuid} value={bl.uuid}>
+                {bl.is_official ? "★ " : ""}{bl.name}
+              </option>
+            ))}
           </select>
           <select
             value={vis}
