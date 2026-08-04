@@ -7,7 +7,7 @@ Push na branch **`main`** dispara ([.github/workflows/main.yml](../.github/workf
 2. **Deploy** — SSH no Hetzner: `git reset --hard origin/main` +
    `docker compose -f deploy/docker-compose.prod.yml up -d --build`.
 
-> **Mesma VPS do pokefit, isolado.** O vanguard vive em `/opt/vanguard`, com seu
+> **Mesma VPS do pokefit, isolado.** O vanguard vive em `/opt/ridedeck`, com seu
 > próprio compose, containers e porta (`127.0.0.1:8002`) — não toca no pokefit.
 > Como é a **mesma máquina**, os secrets de deploy são os **mesmos** do pokefit.
 
@@ -50,7 +50,7 @@ Diferente do pokefit (sqlite no CI), o vanguard usa **Postgres** nos testes
 GitHub → **Actions** → **main** → job **Deploy to Hetzner**. No VPS:
 
 ```bash
-cd /opt/vanguard/deploy
+cd /opt/ridedeck/deploy
 docker compose -f docker-compose.prod.yml logs --tail=80 web
 ```
 

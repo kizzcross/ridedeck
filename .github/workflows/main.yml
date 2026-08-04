@@ -139,7 +139,7 @@ jobs:
           # Isolated from pokefit: own path, own compose file, own containers/port (8002).
           script: |
             set -euo pipefail
-            cd /opt/vanguard
+            cd /opt/ridedeck
             git fetch origin main
             git reset --hard origin/main
             cd deploy

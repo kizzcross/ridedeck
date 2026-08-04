@@ -33,7 +33,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 
 ## 2. Subir os containers
 ```bash
-cd /opt/vanguard/deploy
+cd /opt/ridedeck/deploy
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml logs -f web   # acompanha migrate + gunicorn
 ```
@@ -42,7 +42,7 @@ O `entrypoint.sh` roda `migrate` e `collectstatic` sozinho. O app fica em
 
 ## 3. Nginx (host) + TLS
 ```bash
-sudo cp /opt/vanguard/deploy/nginx/vanguard.conf /etc/nginx/sites-available/vanguard
+sudo cp /opt/ridedeck/deploy/nginx/vanguard.conf /etc/nginx/sites-available/vanguard
 sudo ln -sf /etc/nginx/sites-available/vanguard /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d vanguard.kizzcross.com.br
@@ -51,7 +51,7 @@ Certbot reescreve o `vanguard.conf` para 443 + redirect de 80.
 
 ## 4. Importar o catálogo + criar o admin (uma vez)
 ```bash
-cd /opt/vanguard/deploy
+cd /opt/ridedeck/deploy
 # Catálogo real G+D (~15k cartas) + enriquecimento de nation/clan:
 docker compose -f docker-compose.prod.yml exec web python manage.py import_catalog --source tcgcsv --series G,D --drop-fixture
 docker compose -f docker-compose.prod.yml exec web python manage.py enrich_clans
@@ -61,7 +61,7 @@ docker compose -f docker-compose.prod.yml exec web python manage.py create_platf
 
 ## 5. Atualizações (deploy de nova versão)
 ```bash
-cd /opt/vanguard && git pull
+cd /opt/ridedeck && git pull
 cd deploy && docker compose -f docker-compose.prod.yml up -d --build
 ```
 `migrate`/`collectstatic` rodam de novo no boot. Zero downtime não é garantido

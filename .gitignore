@@ -20,7 +20,9 @@ dist/
 # Env / secrets
 .env
 .env.*
+# keep every *.example template (e.g. deploy/.env.production.example)
 !.env.example
+!*.example
 
 # Editor / OS
 .DS_Store
