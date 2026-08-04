@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/*
+  RideDeck design system — "arcade TCG" identity.
+  Gamified, pixel-forward look (inspired by retro card-battle UIs): pixel display
+  type, chunky panels with hard offset shadows, an energetic amber accent over a
+  deep indigo canvas, plus a subtle grid backdrop. Original palette.
+*/
+
+@theme {
+  --font-sans: "Pixelify Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Silkscreen", "Pixelify Sans", monospace;
+
+  /* Brand ramp (amber/gold) */
+  --color-brand-50: #fff8e6;
+  --color-brand-100: #ffefbf;
+  --color-brand-200: #ffe08a;
+  --color-brand-300: #ffd25c;
+  --color-brand-400: #ffc233;
+  --color-brand-500: #f4a91e;
+  --color-brand-600: #d8860f;
+  --color-brand-700: #a9640c;
+  --color-brand-800: #7d4a0e;
+  --color-brand-900: #5c380f;
+
+  --color-accent: #ffcf4a;        /* arcade gold */
+  --color-accent-strong: #ffb000;
+  --color-violet: #b07bff;
+  --color-cyan: #56d7e6;
+
+  /* Semantic (dark defaults) */
+  --color-canvas: #12122a;
+  --color-surface: #1b1b3a;
+  --color-surface-2: #24244d;
+  --color-surface-3: #2f2f61;
+  --color-border: #0c0c1c;        /* dark chunky outline */
+  --color-border-strong: #3a3a78;
+  --color-ink: #f6f4ff;
+  --color-ink-muted: #b9b6e6;
+  --color-ink-subtle: #7d7ab0;
+
+  --color-success: #66e08a;
+  --color-warning: #ffcf4a;
+  --color-danger: #ff6b6b;
+  --color-info: #56d7e6;
+
+  /* Grade / card-role accents */
+  --color-grade-0: #8a90b8;
+  --color-grade-1: #66e08a;
+  --color-grade-2: #56d7e6;
+  --color-grade-3: #b07bff;
+  --color-grade-4: #ffcf4a;
+
+  --radius-card: 0.5rem;
+  --shadow-hard: 4px 4px 0 0 var(--color-border);
+  --shadow-hard-sm: 2px 2px 0 0 var(--color-border);
+  --shadow-glow: 0 0 0 2px var(--color-accent), 0 0 22px -4px var(--color-accent);
+  --shadow-soft: 0 12px 30px -14px rgba(0, 0, 0, 0.7);
+  --shadow-card: 0 2px 0 0 var(--color-border), 0 14px 28px -16px rgba(0, 0, 0, 0.8);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+  --color-canvas: #ecebf7;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f0fb;
+  --color-surface-3: #e4e2f6;
+  --color-border: #2b2b4d;
+  --color-border-strong: #b7b4dd;
+  --color-ink: #1a1836;
+  --color-ink-muted: #4a4770;
+  --color-ink-subtle: #6f6ca0;
+}
+
+* {
+  border-color: var(--color-border-strong);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+body {
+  background-color: var(--color-canvas);
+  /* subtle arcade grid */
+  background-image:
+    radial-gradient(1100px 520px at 12% -10%, rgba(255, 194, 51, 0.08), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgba(176, 123, 255, 0.1), transparent 55%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+
+/* Gradient headline — used for hero + section titles */
+.text-gradient {
+  background: linear-gradient(100deg, var(--color-accent) 0%, #ffe9a8 45%, var(--color-violet) 110%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Smooth interaction transitions everywhere */
+a, button, [role="button"], input, select, textarea {
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.1s ease;
+}
+
+/* Card hover: lift + colored glow (driven by --glow set per card) */
+.rd-card {
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.16s ease, filter 0.16s ease;
+}
+.rd-card:hover,
+.rd-card:focus-visible {
+  transform: translateY(-6px);
+  box-shadow: 0 0 0 2px var(--glow, var(--color-accent)), 0 16px 34px -12px var(--glow, rgba(0, 0, 0, 0.7));
+}
+
+/* Elevated panel with a subtle top highlight */
+.rd-panel-lift {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 90px);
+}
+
+@keyframes rd-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rd-fade-in { animation: rd-fade-in 0.28s ease both; }
+
+@keyframes rd-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 207, 74, 0.0); }
+  50% { box-shadow: 0 0 22px -2px rgba(255, 207, 74, 0.5); }
+}
+
+/* Chunky arcade panel + button helpers */
+.rd-panel {
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-hard);
+}
+.rd-press {
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+}
+.rd-press:active {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-hard-sm) !important;
+}
+
+/* Focus ring — never rely on color alone. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@keyframes rd-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.rd-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-2) 25%,
+    var(--color-surface-3) 37%,
+    var(--color-surface-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: rd-shimmer 1.4s ease infinite;
+}
+
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 0;
+  border: 3px solid var(--color-canvas);
+}

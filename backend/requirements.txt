@@ -1,0 +1,18 @@
+# Runtime dependencies (mirror of pyproject [project].dependencies).
+# Used by the Docker image for reproducible, cache-friendly installs.
+Django==5.1.5
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.4.0
+django-filter==24.3
+django-cors-headers==4.6.0
+drf-spectacular==0.28.0
+psycopg[binary]==3.2.3
+celery==5.4.0
+redis==5.2.1
+django-redis==5.4.0
+Pillow==11.1.0
+python-dotenv==1.0.1
+structlog==24.4.0
+requests==2.32.3
+gunicorn==23.0.0
+whitenoise==6.8.2
