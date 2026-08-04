@@ -146,6 +146,32 @@ class BanlistViewSet(viewsets.ModelViewSet):
                               "new": banlist.category})
         return Response({"category": banlist.category, "is_official": banlist.is_official})
 
+    @action(detail=True, methods=["get"], url_path="restriction-map")
+    def restriction_map(self, request, uuid=None):
+        """{card_uuid: {type, limit, group}} for the current version — lets the
+        deck builder mark banned/limited cards inline."""
+        banlist = self.get_object()
+        version = banlist.current_version
+        result: dict[str, dict] = {}
+        if not version:
+            return Response({"format_code": banlist.format_code, "restrictions": {}})
+        for entry in version.entries.select_related("card", "group").prefetch_related(
+                "group__members__card"):
+            if entry.card_id:
+                result[str(entry.card.uuid)] = {
+                    "type": entry.restriction_type,
+                    "limit": entry.effective_limit(),
+                }
+            elif entry.group_id:
+                for m in entry.group.members.all():
+                    result.setdefault(str(m.card.uuid), {
+                        "type": entry.restriction_type,
+                        "limit": entry.group.limit_value,
+                        "group": entry.group.name,
+                        "group_kind": entry.group.kind,
+                    })
+        return Response({"format_code": banlist.format_code, "restrictions": result})
+
     @action(detail=True, methods=["post"])
     def fork(self, request, uuid=None):
         banlist = self.get_object()

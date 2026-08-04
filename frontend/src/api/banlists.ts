@@ -94,4 +94,17 @@ export const banlistsApi = {
     const { data } = await api.post<{ is_official: boolean }>(`/banlists/${uuid}/make-official/`, { official });
     return data;
   },
+  async restrictionMap(uuid: string) {
+    const { data } = await api.get<{ format_code: string; restrictions: Record<string, RestrictionInfo> }>(
+      `/banlists/${uuid}/restriction-map/`,
+    );
+    return data.restrictions;
+  },
 };
+
+export interface RestrictionInfo {
+  type: string;
+  limit: number;
+  group?: string;
+  group_kind?: string;
+}
