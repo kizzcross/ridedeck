@@ -34,6 +34,9 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+    # Build the shared app image ONCE; celery services reuse it (avoids the
+    # BuildKit "image already exists" race from building 3 identical images).
+    image: ridedeck-app:latest
     restart: unless-stopped
     env_file: .env
     environment:
@@ -52,9 +55,8 @@ services:
       - /var/www/vanguard/static:/app/staticfiles
 
   celery-worker:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ridedeck-app:latest   # reuse the image built by `web` (no rebuild)
+    pull_policy: never
     restart: unless-stopped
     env_file: .env
     environment:
@@ -63,13 +65,13 @@ services:
     entrypoint: []
     command: ["celery", "-A", "config", "worker", "-l", "info"]
     depends_on:
+      - web
       - db
       - redis
 
   celery-beat:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ridedeck-app:latest   # reuse the image built by `web` (no rebuild)
+    pull_policy: never
     restart: unless-stopped
     env_file: .env
     environment:
@@ -78,6 +80,7 @@ services:
     entrypoint: []
     command: ["celery", "-A", "config", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
     depends_on:
+      - web
       - db
       - redis
 
