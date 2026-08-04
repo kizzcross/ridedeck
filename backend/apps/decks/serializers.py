@@ -66,11 +66,12 @@ class DeckDetailSerializer(serializers.ModelSerializer):
         fields = ["uuid", "title", "description", "format_code", "visibility", "owner",
                   "nation_focus", "clan_focus", "archetype", "tags", "guide", "combos",
                   "matchups", "side_notes", "changelog", "like_count", "favorite_count",
-                  "forked_from", "check_banlist_uuid", "current_version", "is_owner",
-                  "created_at", "updated_at"]
+                  "forked_from", "check_banlist_uuid", "check_banlist_name",
+                  "current_version", "is_owner", "created_at", "updated_at"]
         read_only_fields = ["like_count", "favorite_count", "forked_from"]
 
     check_banlist_uuid = serializers.SerializerMethodField()
+    check_banlist_name = serializers.SerializerMethodField()
 
     def get_is_owner(self, obj) -> bool:
         request = self.context.get("request")
@@ -78,6 +79,9 @@ class DeckDetailSerializer(serializers.ModelSerializer):
 
     def get_check_banlist_uuid(self, obj):
         return str(obj.check_banlist.uuid) if obj.check_banlist_id else None
+
+    def get_check_banlist_name(self, obj):
+        return obj.check_banlist.name if obj.check_banlist_id else None
 
 
 class DeckWriteSerializer(serializers.ModelSerializer):

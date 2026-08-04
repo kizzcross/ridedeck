@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, GitFork, Layers, ShieldCheck, Trash2 } from "lucide-react";
 import { banlistsApi } from "@/api/banlists";
 import { cardsApi, type CardListItem } from "@/api/cards";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Badge, Button, Panel, Skeleton, useToast } from "@/components/ui";
+import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
+import { CommentThread } from "@/components/CommentThread";
 import { apiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -54,10 +55,12 @@ function CardPicker({ onPick }: { onPick: (c: CardListItem) => void }) {
 
 export function BanlistDetailPage() {
   const { uuid = "" } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
   const qc = useQueryClient();
   const [restriction, setRestriction] = useState("banned");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: bl, isLoading } = useQuery({ queryKey: ["banlist", uuid], queryFn: () => banlistsApi.detail(uuid) });
   const refresh = () => qc.invalidateQueries({ queryKey: ["banlist", uuid] });
@@ -74,6 +77,15 @@ export function BanlistDetailPage() {
   const makeOfficial = useMutation({
     mutationFn: () => banlistsApi.makeOfficial(uuid, !bl?.is_official),
     onSuccess: () => { refresh(); toast.success("Status oficial atualizado"); },
+    onError: (e) => toast.error("Erro", apiErrorMessage(e)),
+  });
+  const del = useMutation({
+    mutationFn: () => banlistsApi.remove(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["banlists"] });
+      toast.success("Banlist excluída");
+      navigate("/app/banlists");
+    },
     onError: (e) => toast.error("Erro", apiErrorMessage(e)),
   });
 
@@ -106,9 +118,23 @@ export function BanlistDetailPage() {
                 <ShieldCheck className="h-4 w-4" /> {bl.is_official ? "Remover oficial" : "Tornar oficial"}
               </Button>
             )}
+            {bl.is_owner && (
+              <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="h-4 w-4" /> Excluir
+              </Button>
+            )}
           </div>
         </div>
       </Panel>
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        title="Excluir banlist"
+        description={`"${bl.name}" e todas as suas restrições serão removidas.`}
+        loading={del.isPending}
+        onConfirm={() => del.mutate()}
+        onClose={() => setConfirmDelete(false)}
+      />
 
       {/* Owner editor */}
       {bl.is_owner && (
@@ -191,6 +217,8 @@ export function BanlistDetailPage() {
           </div>
         </Panel>
       )}
+
+      <CommentThread targetType="banlist" targetUuid={uuid} />
     </div>
   );
 }

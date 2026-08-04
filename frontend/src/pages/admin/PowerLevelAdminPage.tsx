@@ -11,6 +11,7 @@ const LEVELS = Array.from({ length: 10 }, (_, i) => i + 1);
 const FORMATS = [
   { code: "standard", label: "Standard" },
   { code: "v_premium", label: "V Premium" },
+  { code: "g", label: "G Era" },
   { code: "premium", label: "Premium" },
 ];
 

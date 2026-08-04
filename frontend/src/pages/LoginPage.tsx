@@ -29,7 +29,8 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(data.email, data.password);
-      const to = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/app";
+      const next = new URLSearchParams(location.search).get("next");
+      const to = next || (location.state as { from?: { pathname: string } })?.from?.pathname || "/app";
       navigate(to, { replace: true });
     } catch (e) {
       toast.error("Não foi possível entrar", apiErrorMessage(e, "Credenciais inválidas."));

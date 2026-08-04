@@ -8,6 +8,8 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { CatalogPage } from "@/pages/CatalogPage";
 import { MyDecksPage } from "@/pages/MyDecksPage";
 import { DeckBuilderPage } from "@/pages/DeckBuilderPage";
+import { DeckViewPage } from "@/pages/DeckViewPage";
+import { PublicDeckPage } from "@/pages/PublicDeckPage";
 import { CollectionPage } from "@/pages/CollectionPage";
 import { BanlistsPage } from "@/pages/BanlistsPage";
 import { BanlistDetailPage } from "@/pages/BanlistDetailPage";
@@ -22,6 +24,7 @@ export const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
+  { path: "/d/:uuid", element: <PublicDeckPage /> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -35,6 +38,7 @@ export const router = createBrowserRouter([
           { path: "u/:username", element: <PublicProfilePage /> },
           { path: "decks", element: <MyDecksPage /> },
           { path: "decks/:uuid", element: <DeckBuilderPage /> },
+          { path: "decks/:uuid/view", element: <DeckViewPage /> },
           { path: "collection", element: <CollectionPage /> },
           { path: "banlists", element: <BanlistsPage /> },
           { path: "banlists/:uuid", element: <BanlistDetailPage /> },

@@ -43,6 +43,14 @@ class DeckViewSet(viewsets.ModelViewSet):
             mine = self.request.query_params.get("mine")
             if mine and user.is_authenticated:
                 return base.filter(owner=user)
+            # Another user's public decks (community browsing).
+            owner = self.request.query_params.get("owner")
+            if owner:
+                q = Q(owner__username__iexact=owner, visibility=Visibility.PUBLIC)
+                if user.is_authenticated:
+                    # you always see your own, whatever the visibility
+                    q |= Q(owner__username__iexact=owner, owner=user)
+                return base.filter(q)
             # public catalog (+ your own, whatever their visibility)
             q = Q(visibility=Visibility.PUBLIC)
             if user.is_authenticated:

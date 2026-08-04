@@ -48,6 +48,15 @@ class BanlistViewSet(viewsets.ModelViewSet):
             "owner", "current_version"
         )
         if self.action == "list":
+            # Another user's public/listed banlists (community browsing).
+            owner = self.request.query_params.get("owner")
+            if owner:
+                q = Q(owner__username__iexact=owner) & (
+                    Q(is_public=True, is_listed=True) | Q(category=BanlistCategory.OFFICIAL)
+                )
+                if user.is_authenticated:
+                    q |= Q(owner__username__iexact=owner, owner=user)
+                return base.filter(q)
             q = Q(category=BanlistCategory.OFFICIAL) | Q(is_public=True, is_listed=True)
             if user.is_authenticated:
                 q |= Q(owner=user)

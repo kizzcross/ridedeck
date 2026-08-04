@@ -20,6 +20,7 @@ from .views_social import (
     FriendshipViewSet,
     MyFavoriteIdsView,
     PromoteUserView,
+    UserFavoriteCardsView,
 )
 
 
@@ -43,6 +44,8 @@ urlpatterns = [
     path("me/favorites/ids/", MyFavoriteIdsView.as_view(), name="me-favorite-ids"),
     path("avatars/options/", AvatarOptionsView.as_view(), name="avatar-options"),
     path("admin/users/promote/", PromoteUserView.as_view(), name="admin-promote-user"),
+    path("users/<str:username>/favorite-cards/", UserFavoriteCardsView.as_view(),
+         name="user-favorite-cards"),
     path("users/<str:username>/", PublicProfileView.as_view(), name="public-profile"),
     *router.urls,
 ]
