@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, GitFork, Layers, ShieldCheck, Trash2 } from "lucide-react";
+import { Ban, GitFork, Info, Layers, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { banlistsApi } from "@/api/banlists";
 import { cardsApi, type CardListItem } from "@/api/cards";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,14 +11,50 @@ import { CommentThread } from "@/components/CommentThread";
 import { apiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
-const RESTRICTIONS = [
-  { code: "banned", label: "Banir", tone: "danger" as const },
-  { code: "limit_to_1", label: "Limitar a 1", tone: "warning" as const },
-  { code: "limit_to_2", label: "Limitar a 2", tone: "warning" as const },
-  { code: "first_vanguard_forbidden", label: "First Vanguard proibido", tone: "neutral" as const },
-];
+type Tone = "danger" | "warning" | "official" | "neutral";
 
-function CardPicker({ onPick }: { onPick: (c: CardListItem) => void }) {
+/** Every card-level restriction: how to label it, its color, and — crucial for
+ *  UX — a plain-Portuguese explanation of what it actually does. */
+const RESTRICTION_META: Record<string, { label: string; tone: Tone; desc: string }> = {
+  banned: {
+    label: "Banida",
+    tone: "danger",
+    desc: "Não pode ser incluída no deck de jeito nenhum.",
+  },
+  limit_to_1: {
+    label: "Limite 1",
+    tone: "warning",
+    desc: "No máximo 1 cópia no deck.",
+  },
+  limit_to_2: {
+    label: "Limite 2",
+    tone: "warning",
+    desc: "No máximo 2 cópias no deck.",
+  },
+  first_vanguard_forbidden: {
+    label: "Vanguarda inicial proibida",
+    tone: "official",
+    desc: "Não pode ser usada como Vanguarda inicial (a unidade grade 0 que você coloca virada pra baixo pra começar o jogo). Continua liberada no resto do deck.",
+  },
+};
+const CARD_RESTRICTIONS = ["banned", "limit_to_1", "limit_to_2", "first_vanguard_forbidden"];
+
+const GROUP_KINDS: Record<string, { label: string; desc: (n: number) => string }> = {
+  choice: {
+    label: "Escolha 1",
+    desc: () => "Você só pode incluir 1 destas cartas no deck — escolha uma delas.",
+  },
+  max_distinct: {
+    label: "Máx. distintas",
+    desc: (n) => `No máximo ${n} carta(s) diferente(s) deste grupo no deck.`,
+  },
+  max_total: {
+    label: "Máx. cópias",
+    desc: (n) => `No máximo ${n} cópia(s) somando todas as cartas do grupo.`,
+  },
+};
+
+function CardPicker({ onPick, placeholder = "Buscar carta para restringir…" }: { onPick: (c: CardListItem) => void; placeholder?: string }) {
   const [raw, setRaw] = useState("");
   const search = useDebounce(raw, 300);
   const { data } = useQuery({
@@ -31,7 +67,7 @@ function CardPicker({ onPick }: { onPick: (c: CardListItem) => void }) {
       <input
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
-        placeholder="Buscar carta para restringir…"
+        placeholder={placeholder}
         className="h-9 w-full rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
       />
       {data && data.results.length > 0 && (
@@ -48,6 +84,103 @@ function CardPicker({ onPick }: { onPick: (c: CardListItem) => void }) {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/** Builds a choice / max-distinct / max-total group — the feature that used to
+ *  only be displayed, never created. */
+function GroupBuilder({ uuid, onCreated }: { uuid: string; onCreated: () => void }) {
+  const toast = useToast();
+  const [kind, setKind] = useState("choice");
+  const [name, setName] = useState("");
+  const [limit, setLimit] = useState(1);
+  const [members, setMembers] = useState<CardListItem[]>([]);
+
+  const create = useMutation({
+    mutationFn: () =>
+      banlistsApi.addGroup(uuid, {
+        name: name.trim() || "Grupo de escolha",
+        kind,
+        limit_value: kind === "choice" ? 1 : Math.max(1, limit),
+        members: members.map((m) => m.uuid),
+      }),
+    onSuccess: () => {
+      toast.success("Grupo criado");
+      setName(""); setMembers([]); setLimit(1); setKind("choice");
+      onCreated();
+    },
+    onError: (e) => toast.error("Erro", apiErrorMessage(e)),
+  });
+
+  const addMember = (c: CardListItem) => {
+    setMembers((prev) => (prev.some((m) => m.uuid === c.uuid) ? prev : [...prev, c]));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1">
+        {Object.entries(GROUP_KINDS).map(([code, k]) => (
+          <button
+            key={code}
+            onClick={() => setKind(code)}
+            className={cn(
+              "font-display rounded-[4px] border-2 px-3 py-1.5 text-[11px] uppercase",
+              kind === code
+                ? "border-[var(--color-border)] bg-[var(--color-violet)] text-white"
+                : "border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-ink-muted)]",
+            )}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="flex items-start gap-2 rounded-[6px] bg-[var(--color-violet)]/10 p-2.5 text-xs text-[var(--color-ink-muted)]">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-violet)]" />
+        {GROUP_KINDS[kind].desc(Math.max(1, limit))}
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nome do grupo (ex.: Guardiões perfeitos)"
+          className="h-9 min-w-0 flex-1 rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
+        />
+        {kind !== "choice" && (
+          <input
+            type="number"
+            min={1}
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value) || 1)}
+            aria-label="Limite"
+            className="h-9 w-20 rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
+          />
+        )}
+      </div>
+
+      {members.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {members.map((m) => (
+            <span key={m.uuid} className="flex items-center gap-1 rounded-[4px] border-2 border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs">
+              {m.name}
+              <button aria-label="Remover" onClick={() => setMembers((p) => p.filter((x) => x.uuid !== m.uuid))}>
+                <X className="h-3 w-3 text-[var(--color-ink-subtle)] hover:text-[var(--color-danger)]" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <CardPicker onPick={addMember} placeholder="Adicionar carta ao grupo…" />
+
+      <Button size="sm" disabled={members.length < 2} loading={create.isPending} onClick={() => create.mutate()}>
+        <Plus className="h-4 w-4" /> Criar grupo ({members.length})
+      </Button>
+      {members.length < 2 && (
+        <p className="text-[11px] text-[var(--color-ink-subtle)]">Adicione pelo menos 2 cartas ao grupo.</p>
       )}
     </div>
   );
@@ -136,84 +269,110 @@ export function BanlistDetailPage() {
         onClose={() => setConfirmDelete(false)}
       />
 
-      {/* Owner editor */}
+      {/* Owner editors */}
       {bl.is_owner && (
-        <Panel className="space-y-3 p-4">
-          <h3 className="font-display text-sm uppercase text-[var(--color-ink-muted)]">Adicionar restrição</h3>
-          <div className="flex flex-wrap gap-1">
-            {RESTRICTIONS.map((r) => (
-              <button
-                key={r.code}
-                onClick={() => setRestriction(r.code)}
-                className={cn(
-                  "font-display rounded-[4px] border-2 px-3 py-1.5 text-[11px] uppercase",
-                  restriction === r.code
-                    ? "border-[var(--color-border)] bg-[var(--color-accent)] text-[#1a1400]"
-                    : "border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-ink-muted)]",
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-          <CardPicker onPick={(c) => addEntry.mutate(c.uuid)} />
-        </Panel>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel className="space-y-3 p-4">
+            <div>
+              <h3 className="font-display text-sm uppercase text-[var(--color-ink-muted)]">Restringir uma carta</h3>
+              <p className="text-xs text-[var(--color-ink-subtle)]">Escolha o tipo e busque a carta.</p>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {CARD_RESTRICTIONS.map((code) => (
+                <button
+                  key={code}
+                  onClick={() => setRestriction(code)}
+                  className={cn(
+                    "font-display rounded-[4px] border-2 px-3 py-1.5 text-[11px] uppercase",
+                    restriction === code
+                      ? "border-[var(--color-border)] bg-[var(--color-accent)] text-[#1a1400]"
+                      : "border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-ink-muted)]",
+                  )}
+                >
+                  {RESTRICTION_META[code].label}
+                </button>
+              ))}
+            </div>
+            <p className="flex items-start gap-2 rounded-[6px] bg-[var(--color-surface-2)] p-2.5 text-xs text-[var(--color-ink-muted)]">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-info)]" />
+              {RESTRICTION_META[restriction]?.desc}
+            </p>
+            <CardPicker onPick={(c) => addEntry.mutate(c.uuid)} />
+          </Panel>
+
+          <Panel className="space-y-3 p-4">
+            <div>
+              <h3 className="font-display text-sm uppercase text-[var(--color-ink-muted)]">Grupo de escolha</h3>
+              <p className="text-xs text-[var(--color-ink-subtle)]">
+                Regra que vale para um conjunto de cartas juntas (ex.: “só pode usar 1 destas”).
+              </p>
+            </div>
+            <GroupBuilder uuid={uuid} onCreated={refresh} />
+          </Panel>
+        </div>
       )}
 
-      {/* Entries */}
+      {/* Card restrictions */}
       <Panel className="p-4">
         <h3 className="font-display mb-3 flex items-center gap-2 text-sm uppercase text-[var(--color-ink-muted)]">
-          <Ban className="h-4 w-4" /> Restrições ({entries.length})
+          <Ban className="h-4 w-4" /> Cartas restritas ({cardEntries.length})
         </h3>
-        {entries.length === 0 ? (
-          <p className="text-sm text-[var(--color-ink-subtle)]">Nenhuma restrição ainda.</p>
+        {cardEntries.length === 0 ? (
+          <p className="text-sm text-[var(--color-ink-subtle)]">Nenhuma carta restrita ainda.</p>
         ) : (
           <ul className="space-y-1.5">
-            {cardEntries.map((e) => (
-              <li key={e.uuid} className="flex items-center gap-2 rounded-[6px] bg-[var(--color-surface-2)] px-3 py-2 text-sm">
-                <Badge tone={e.restriction_type === "banned" ? "danger" : "warning"}>
-                  {e.restriction_type === "banned" ? "Banida" : `Limite ${e.effective_limit}`}
-                </Badge>
-                <span className="min-w-0 flex-1 truncate">{e.card!.name}</span>
-                {bl.is_owner && (
-                  <button
-                    aria-label="Remover"
-                    onClick={() => addEntryDelete(uuid, e.uuid, refresh)}
-                    className="text-[var(--color-ink-subtle)] hover:text-[var(--color-danger)]"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </li>
-            ))}
+            {cardEntries.map((e) => {
+              const meta = RESTRICTION_META[e.restriction_type] ?? { label: e.restriction_type, tone: "neutral" as Tone, desc: "" };
+              return (
+                <li key={e.uuid} className="flex items-center gap-3 rounded-[6px] bg-[var(--color-surface-2)] px-3 py-2 text-sm">
+                  <Badge tone={meta.tone}>{meta.label}</Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate">{e.card!.name}</p>
+                    {meta.desc && <p className="truncate text-[11px] text-[var(--color-ink-subtle)]">{meta.desc}</p>}
+                  </div>
+                  {bl.is_owner && (
+                    <button
+                      aria-label="Remover"
+                      onClick={() => addEntryDelete(uuid, e.uuid, refresh)}
+                      className="text-[var(--color-ink-subtle)] hover:text-[var(--color-danger)]"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Panel>
 
-      {/* Choice restriction groups */}
+      {/* Choice / max groups */}
       {groupEntries.length > 0 && (
         <Panel className="p-4">
-          <h3 className="font-display mb-3 flex items-center gap-2 text-sm uppercase text-[var(--color-ink-muted)]">
-            <Layers className="h-4 w-4" /> Grupos (Choice Restriction)
+          <h3 className="font-display mb-1 flex items-center gap-2 text-sm uppercase text-[var(--color-ink-muted)]">
+            <Layers className="h-4 w-4" /> Grupos de escolha ({groupEntries.length})
           </h3>
+          <p className="mb-3 text-xs text-[var(--color-ink-subtle)]">
+            Regras que valem para o conjunto de cartas abaixo, não para cada uma isolada.
+          </p>
           <div className="space-y-3">
-            {groupEntries.map((e) => (
-              <div key={e.uuid} className="rounded-[6px] border-2 border-[var(--color-violet)]/40 bg-[var(--color-violet)]/5 p-3">
-                <p className="font-display text-xs uppercase">{e.group!.name}</p>
-                <p className="mb-2 text-[11px] text-[var(--color-ink-subtle)]">
-                  {e.group!.kind === "choice"
-                    ? "Escolha no máximo 1 destas cartas"
-                    : e.group!.kind === "max_distinct"
-                      ? `Máx ${e.group!.limit_value} identidades diferentes`
-                      : `Máx ${e.group!.limit_value} cópias totais`}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {e.group!.members.map((m) => (
-                    <Badge key={m.uuid} tone="neutral">{m.card.name}</Badge>
-                  ))}
+            {groupEntries.map((e) => {
+              const k = GROUP_KINDS[e.group!.kind];
+              return (
+                <div key={e.uuid} className="rounded-[6px] border-2 border-[var(--color-violet)]/40 bg-[var(--color-violet)]/5 p-3">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Badge tone="official">{k?.label ?? e.group!.kind}</Badge>
+                    <p className="font-display text-xs uppercase">{e.group!.name}</p>
+                  </div>
+                  <p className="mb-2 text-[11px] text-[var(--color-ink-muted)]">{k?.desc(e.group!.limit_value)}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {e.group!.members.map((m) => (
+                      <Badge key={m.uuid} tone="neutral">{m.card.name}</Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Panel>
       )}
