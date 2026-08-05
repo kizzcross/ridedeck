@@ -11,7 +11,7 @@ from apps.cards.models import Card
 from apps.common.models import record_audit
 from apps.common.permissions import IsPlatformAdmin
 
-from .choices import BanlistCategory
+from .choices import BanlistCategory, RestrictionType
 from .models import (
     Banlist,
     BanlistComment,
@@ -120,11 +120,26 @@ class BanlistViewSet(viewsets.ModelViewSet):
         version.refresh_from_db()
         return Response(BanlistVersionSerializer(version).data)
 
+    # A choice/max group needs a BanlistEntry pointing at it, otherwise it is
+    # orphaned and never shows up in the version's entries.
+    _GROUP_KIND_TO_RESTRICTION = {
+        "choice": RestrictionType.CHOICE_RESTRICTION,
+        "max_distinct": RestrictionType.MAX_DISTINCT_FROM_GROUP,
+        "max_total": RestrictionType.MAX_TOTAL_FROM_GROUP,
+    }
+
     @extend_schema(request=GroupWriteSerializer)
-    @action(detail=True, methods=["post"], url_path="group")
+    @action(detail=True, methods=["post", "delete"], url_path="group")
     def group(self, request, uuid=None):
         banlist = self.get_object()
         version = ensure_draft_version(banlist)
+        if request.method == "DELETE":
+            # Deleting the group cascades to its entry and members.
+            version.restriction_groups.filter(uuid=request.data.get("group")).delete()
+            banlist.save(update_fields=["updated_at"])
+            version.refresh_from_db()
+            return Response(BanlistVersionSerializer(version).data)
+
         s = GroupWriteSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
@@ -133,6 +148,12 @@ class BanlistViewSet(viewsets.ModelViewSet):
                 version=version, name=d["name"], kind=d["kind"], limit_value=d["limit_value"])
             for card in Card.objects.filter(uuid__in=d["members"]):
                 RestrictionGroupMember.objects.create(group=grp, card=card)
+            BanlistEntry.objects.create(
+                version=version, group=grp,
+                restriction_type=self._GROUP_KIND_TO_RESTRICTION.get(
+                    d["kind"], RestrictionType.CHOICE_RESTRICTION),
+            )
+        banlist.save(update_fields=["updated_at"])
         version.refresh_from_db()
         return Response(BanlistVersionSerializer(version).data, status=status.HTTP_201_CREATED)
 

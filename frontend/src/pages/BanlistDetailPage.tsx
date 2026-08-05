@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, GitFork, Info, Layers, Plus, Save, Settings, ShieldCheck, Trash2, X } from "lucide-react";
+import { Ban, GitFork, Info, Layers, Plus, Save, Settings, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { banlistsApi, type BanlistDetail } from "@/api/banlists";
 import { cardsApi, type CardListItem } from "@/api/cards";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,51 +9,11 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
 import { CommentThread } from "@/components/CommentThread";
 import { FORMATS, formatLabel } from "@/lib/formats";
+import { CARD_RESTRICTIONS, GROUP_KINDS, RESTRICTION_META, type RestrictionTone } from "@/lib/banlistMeta";
 import { apiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
-type Tone = "danger" | "warning" | "official" | "neutral";
-
-/** Every card-level restriction: how to label it, its color, and — crucial for
- *  UX — a plain-Portuguese explanation of what it actually does. */
-const RESTRICTION_META: Record<string, { label: string; tone: Tone; desc: string }> = {
-  banned: {
-    label: "Banida",
-    tone: "danger",
-    desc: "Não pode ser incluída no deck de jeito nenhum.",
-  },
-  limit_to_1: {
-    label: "Limite 1",
-    tone: "warning",
-    desc: "No máximo 1 cópia no deck.",
-  },
-  limit_to_2: {
-    label: "Limite 2",
-    tone: "warning",
-    desc: "No máximo 2 cópias no deck.",
-  },
-  first_vanguard_forbidden: {
-    label: "Vanguarda inicial proibida",
-    tone: "official",
-    desc: "Não pode ser usada como Vanguarda inicial (a unidade grade 0 que você coloca virada pra baixo pra começar o jogo). Continua liberada no resto do deck.",
-  },
-};
-const CARD_RESTRICTIONS = ["banned", "limit_to_1", "limit_to_2", "first_vanguard_forbidden"];
-
-const GROUP_KINDS: Record<string, { label: string; desc: (n: number) => string }> = {
-  choice: {
-    label: "Escolha 1",
-    desc: () => "Você só pode incluir 1 destas cartas no deck — escolha uma delas.",
-  },
-  max_distinct: {
-    label: "Máx. distintas",
-    desc: (n) => `No máximo ${n} carta(s) diferente(s) deste grupo no deck.`,
-  },
-  max_total: {
-    label: "Máx. cópias",
-    desc: (n) => `No máximo ${n} cópia(s) somando todas as cartas do grupo.`,
-  },
-};
+type Tone = RestrictionTone;
 
 function CardPicker({ onPick, placeholder = "Buscar carta para restringir…" }: { onPick: (c: CardListItem) => void; placeholder?: string }) {
   const [raw, setRaw] = useState("");
@@ -306,6 +266,11 @@ export function BanlistDetailPage() {
     },
     onError: (e) => toast.error("Erro", apiErrorMessage(e)),
   });
+  const delGroup = useMutation({
+    mutationFn: (groupUuid: string) => banlistsApi.removeGroup(uuid, groupUuid),
+    onSuccess: refresh,
+    onError: (e) => toast.error("Erro", apiErrorMessage(e)),
+  });
 
   if (isLoading || !bl) return <Skeleton className="h-64 w-full" />;
 
@@ -329,6 +294,9 @@ export function BanlistDetailPage() {
             {bl.owner && <p className="mt-1 text-xs text-[var(--color-ink-subtle)]">por {bl.owner.username}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
+            <a href={`/b/${uuid}`} target="_blank" rel="noreferrer">
+              <Button variant="ghost" size="sm"><Sparkles className="h-4 w-4" /> Ver / exportar</Button>
+            </a>
             <Button variant="secondary" size="sm" loading={fork.isPending} onClick={() => fork.mutate()}>
               <GitFork className="h-4 w-4" /> Fork
             </Button>
@@ -458,6 +426,15 @@ export function BanlistDetailPage() {
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     <Badge tone="official">{k?.label ?? e.group!.kind}</Badge>
                     <p className="font-display text-xs uppercase">{e.group!.name}</p>
+                    {bl.is_owner && (
+                      <button
+                        aria-label="Remover grupo"
+                        onClick={() => delGroup.mutate(e.group!.uuid)}
+                        className="ml-auto text-[var(--color-ink-subtle)] hover:text-[var(--color-danger)]"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                   <p className="mb-2 text-[11px] text-[var(--color-ink-muted)]">{k?.desc(e.group!.limit_value)}</p>
                   <div className="flex flex-wrap gap-1.5">

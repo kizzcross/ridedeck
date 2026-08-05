@@ -10,6 +10,7 @@ import { MyDecksPage } from "@/pages/MyDecksPage";
 import { DeckBuilderPage } from "@/pages/DeckBuilderPage";
 import { DeckViewPage } from "@/pages/DeckViewPage";
 import { PublicDeckPage } from "@/pages/PublicDeckPage";
+import { PublicBanlistPage } from "@/pages/PublicBanlistPage";
 import { CollectionPage } from "@/pages/CollectionPage";
 import { BanlistsPage } from "@/pages/BanlistsPage";
 import { BanlistDetailPage } from "@/pages/BanlistDetailPage";
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
   { path: "/d/:uuid", element: <PublicDeckPage /> },
+  { path: "/b/:uuid", element: <PublicBanlistPage /> },
   {
     element: <ProtectedRoute />,
     children: [
