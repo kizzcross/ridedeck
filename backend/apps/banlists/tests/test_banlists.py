@@ -122,6 +122,30 @@ def test_admin_can_make_official(platform_admin, member):
     assert r.data["is_official"] is True
 
 
+def test_group_creation_links_entry_and_shows_up(member, cards):
+    """A created choice group must produce a BanlistEntry so it is visible."""
+    bl = Banlist.objects.create(name="G", owner=member, category=BanlistCategory.COMMUNITY,
+                                format_code="standard")
+    c = client_for(member)
+    r = c.post(reverse("v1:banlist-group", args=[bl.uuid]), {
+        "name": "Guardiões", "kind": "choice",
+        "members": [str(cards[0].uuid), str(cards[1].uuid)],
+    }, format="json")
+    assert r.status_code == 201, r.content
+    # The version now has one entry pointing at the group.
+    entries = r.data["entries"]
+    assert len(entries) == 1
+    assert entries[0]["group"] is not None
+    assert entries[0]["restriction_type"] == RestrictionType.CHOICE_RESTRICTION
+    assert len(entries[0]["group"]["members"]) == 2
+
+    group_uuid = entries[0]["group"]["uuid"]
+    r = c.delete(reverse("v1:banlist-group", args=[bl.uuid]), {"group": group_uuid}, format="json")
+    assert r.status_code == 200
+    assert r.data["entries"] == []
+    assert RestrictionGroup.objects.filter(uuid=group_uuid).count() == 0
+
+
 def test_fork_creates_community_copy(member, other_member, cards):
     bl, v = _version(cards)
     bl.owner = member

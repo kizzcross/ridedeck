@@ -93,6 +93,10 @@ export const banlistsApi = {
     const { data } = await api.post<BanlistVersion>(`/banlists/${uuid}/group/`, group);
     return data;
   },
+  async removeGroup(uuid: string, groupUuid: string) {
+    const { data } = await api.delete<BanlistVersion>(`/banlists/${uuid}/group/`, { data: { group: groupUuid } });
+    return data;
+  },
   async fork(uuid: string) {
     const { data } = await api.post<BanlistDetail>(`/banlists/${uuid}/fork/`);
     return data;
