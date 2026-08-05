@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, GitFork, Info, Layers, Plus, ShieldCheck, Trash2, X } from "lucide-react";
-import { banlistsApi } from "@/api/banlists";
+import { Ban, GitFork, Info, Layers, Plus, Save, Settings, ShieldCheck, Trash2, X } from "lucide-react";
+import { banlistsApi, type BanlistDetail } from "@/api/banlists";
 import { cardsApi, type CardListItem } from "@/api/cards";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
 import { CommentThread } from "@/components/CommentThread";
+import { FORMATS, formatLabel } from "@/lib/formats";
 import { apiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -186,6 +187,89 @@ function GroupBuilder({ uuid, onCreated }: { uuid: string; onCreated: () => void
   );
 }
 
+/** Owner-only settings: rename, change format, objective/description, visibility. */
+function BanlistSettings({ bl, onSaved }: { bl: BanlistDetail; onSaved: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState(bl.name);
+  const [format, setFormat] = useState(bl.format_code);
+  const [objective, setObjective] = useState(bl.objective ?? "");
+  const [description, setDescription] = useState(bl.description ?? "");
+  const [isPublic, setIsPublic] = useState(bl.is_public);
+  const [isListed, setIsListed] = useState(bl.is_listed);
+
+  const save = useMutation({
+    mutationFn: () =>
+      banlistsApi.update(bl.uuid, {
+        name: name.trim() || bl.name,
+        format_code: format,
+        objective,
+        description,
+        is_public: isPublic,
+        is_listed: isListed,
+      }),
+    onSuccess: () => { toast.success("Banlist atualizada"); onSaved(); },
+    onError: (e) => toast.error("Erro", apiErrorMessage(e)),
+  });
+
+  const field = "h-10 w-full rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm";
+  const lbl = "font-display mb-1 block text-[10px] uppercase text-[var(--color-ink-muted)]";
+
+  return (
+    <Panel className="space-y-3 p-4">
+      <h3 className="font-display flex items-center gap-2 text-sm uppercase text-[var(--color-ink-muted)]">
+        <Settings className="h-4 w-4" /> Configurações
+      </h3>
+      <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">
+        <label>
+          <span className={lbl}>Nome</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} className={field} />
+        </label>
+        <label>
+          <span className={lbl}>Formato</span>
+          <select value={format} onChange={(e) => setFormat(e.target.value)} className={field}>
+            {FORMATS.map((f) => <option key={f.code} value={f.code}>{f.label}</option>)}
+          </select>
+        </label>
+      </div>
+      {format !== bl.format_code && (
+        <p className="flex items-start gap-2 rounded-[6px] bg-[var(--color-warning)]/10 p-2.5 text-xs text-[var(--color-ink-muted)]">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warning)]" />
+          Trocar o formato muda quais cartas são legais nos decks que usam esta banlist. As restrições já cadastradas continuam.
+        </p>
+      )}
+      <label className="block">
+        <span className={lbl}>Objetivo</span>
+        <input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Resumo curto do propósito" className={field} />
+      </label>
+      <label className="block">
+        <span className={lbl}>Descrição</span>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          placeholder="Explique as escolhas da banlist…"
+          className="w-full resize-y rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
+        />
+      </label>
+      <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+          Pública (outros podem ver pelo link)
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isListed} onChange={(e) => setIsListed(e.target.checked)} disabled={!isPublic} />
+          Listada na comunidade
+        </label>
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
+          <Save className="h-4 w-4" /> Salvar
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
 export function BanlistDetailPage() {
   const { uuid = "" } = useParams();
   const navigate = useNavigate();
@@ -194,6 +278,7 @@ export function BanlistDetailPage() {
   const qc = useQueryClient();
   const [restriction, setRestriction] = useState("banned");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const { data: bl, isLoading } = useQuery({ queryKey: ["banlist", uuid], queryFn: () => banlistsApi.detail(uuid) });
   const refresh = () => qc.invalidateQueries({ queryKey: ["banlist", uuid] });
@@ -233,10 +318,11 @@ export function BanlistDetailPage() {
       <Panel className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="mb-1 flex items-center gap-2">
-              {bl.is_official ? <Badge tone="official">Official</Badge> : <Badge tone="community">Community</Badge>}
-              <Badge tone="neutral">{bl.format_code}</Badge>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              {bl.is_official ? <Badge tone="official">Oficial</Badge> : <Badge tone="community">Comunidade</Badge>}
+              <Badge tone="neutral">{formatLabel(bl.format_code)}</Badge>
               <Badge tone="brand">v{bl.current_version?.version}</Badge>
+              {bl.is_owner && !bl.is_public && <Badge tone="warning">Privada</Badge>}
             </div>
             <h1 className="font-display text-2xl">{bl.name}</h1>
             {bl.objective && <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{bl.objective}</p>}
@@ -252,6 +338,11 @@ export function BanlistDetailPage() {
               </Button>
             )}
             {bl.is_owner && (
+              <Button size="sm" variant={settingsOpen ? "secondary" : "ghost"} onClick={() => setSettingsOpen((s) => !s)}>
+                <Settings className="h-4 w-4" /> Configurações
+              </Button>
+            )}
+            {bl.is_owner && (
               <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>
                 <Trash2 className="h-4 w-4" /> Excluir
               </Button>
@@ -259,6 +350,10 @@ export function BanlistDetailPage() {
           </div>
         </div>
       </Panel>
+
+      {bl.is_owner && settingsOpen && (
+        <BanlistSettings bl={bl} onSaved={() => { setSettingsOpen(false); refresh(); }} />
+      )}
 
       <ConfirmDeleteDialog
         open={confirmDelete}
