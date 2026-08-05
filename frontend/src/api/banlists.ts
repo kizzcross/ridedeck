@@ -78,6 +78,13 @@ export const banlistsApi = {
     const { data } = await api.post<BanlistDetail>("/banlists/", payload);
     return data;
   },
+  async update(
+    uuid: string,
+    payload: Partial<{ name: string; format_code: string; objective: string; description: string; is_public: boolean; is_listed: boolean }>,
+  ) {
+    const { data } = await api.patch<BanlistDetail>(`/banlists/${uuid}/`, payload);
+    return data;
+  },
   async addEntry(uuid: string, entry: { restriction_type: string; card?: string; group?: string; limit_value?: number }) {
     const { data } = await api.post<BanlistVersion>(`/banlists/${uuid}/entry/`, entry);
     return data;
