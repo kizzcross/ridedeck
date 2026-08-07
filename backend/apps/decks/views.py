@@ -76,7 +76,7 @@ class DeckViewSet(viewsets.ModelViewSet):
     # Actions that mutate the deck itself require ownership; social actions
     # (fork/like/favorite/comment) only require that the deck be visible.
     OWNER_ACTIONS = {"update", "partial_update", "destroy", "entry", "publish",
-                     "snapshot", "import_list"}
+                     "snapshot", "import_list", "set_cover"}
 
     def get_object(self):
         obj = super().get_object()
@@ -124,6 +124,24 @@ class DeckViewSet(viewsets.ModelViewSet):
         deck.save(update_fields=["updated_at"])
         version.refresh_from_db()
         return Response(DeckVersionSerializer(version).data)
+
+    # --- Cover (featured card) -------------------------------------------
+    @action(detail=True, methods=["post"], url_path="set-cover")
+    def set_cover(self, request, uuid=None):
+        """Set the deck's cover to a card's art (its "main card"). Body accepts a
+        `printing` uuid (preferred) or a `card` uuid (uses its default printing);
+        send neither/null to clear."""
+        deck = self.get_object()
+        printing = None
+        if request.data.get("printing"):
+            printing = CardPrinting.objects.filter(uuid=request.data["printing"]).first()
+        elif request.data.get("card"):
+            card = Card.objects.filter(uuid=request.data["card"]).first()
+            printing = card.printings.exclude(image_url="").first() or (
+                card.printings.first() if card else None)
+        deck.cover_printing = printing
+        deck.save(update_fields=["cover_printing", "updated_at"])
+        return Response(DeckDetailSerializer(deck, context={"request": request}).data)
 
     # --- Builder actions --------------------------------------------------
     @extend_schema(request=SetEntrySerializer, responses=DeckVersionSerializer)

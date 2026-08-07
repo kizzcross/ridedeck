@@ -67,11 +67,20 @@ class DeckDetailSerializer(serializers.ModelSerializer):
                   "nation_focus", "clan_focus", "archetype", "tags", "guide", "combos",
                   "matchups", "side_notes", "changelog", "like_count", "favorite_count",
                   "power_stars", "forked_from", "check_banlist_uuid", "check_banlist_name",
+                  "cover_image", "cover_printing_uuid",
                   "current_version", "is_owner", "created_at", "updated_at"]
         read_only_fields = ["like_count", "favorite_count", "forked_from"]
 
     check_banlist_uuid = serializers.SerializerMethodField()
     check_banlist_name = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
+    cover_printing_uuid = serializers.SerializerMethodField()
+
+    def get_cover_image(self, obj) -> str | None:
+        return obj.cover_printing.image_url if obj.cover_printing_id else None
+
+    def get_cover_printing_uuid(self, obj):
+        return str(obj.cover_printing.uuid) if obj.cover_printing_id else None
 
     def get_is_owner(self, obj) -> bool:
         request = self.context.get("request")

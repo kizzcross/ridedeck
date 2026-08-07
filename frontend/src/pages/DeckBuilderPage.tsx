@@ -126,6 +126,15 @@ export function DeckBuilderPage() {
     toast.info("Formato alterado", FORMAT_LABEL[f]);
   };
 
+  const setCover = async (card: CardListItem) => {
+    const printing = card.default_printing?.uuid ?? null;
+    const isCover = printing && printing === b.deck?.cover_printing_uuid;
+    await decksApi.setCover(uuid, isCover ? null : printing);
+    b.refetch();
+    qc.invalidateQueries({ queryKey: ["decks"] });
+    toast.success(isCover ? "Capa removida" : "Carta principal definida");
+  };
+
   if (b.isLoading || !b.deck) {
     return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-[60vh] w-full" /></div>;
   }
@@ -144,9 +153,11 @@ export function DeckBuilderPage() {
           count={b.zoneCounts[z.key]}
           target={targets[z.key]}
           ownedOf={ownedOf}
+          coverPrintingUuid={b.deck?.cover_printing_uuid}
           onInc={b.add}
           onDec={b.decrement}
           onRemove={b.removeAll}
+          onSetCover={setCover}
         />
       ))}
     </div>

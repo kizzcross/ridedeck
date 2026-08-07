@@ -66,6 +66,8 @@ export interface DeckDetail {
   forked_from: number | null;
   check_banlist_uuid: string | null;
   check_banlist_name: string | null;
+  cover_image: string | null;
+  cover_printing_uuid: string | null;
   current_version: DeckVersion;
   is_owner: boolean;
   created_at: string;
@@ -144,6 +146,10 @@ export const decksApi = {
   },
   async fork(uuid: string) {
     const { data } = await api.post<DeckDetail>(`/decks/${uuid}/fork/`);
+    return data;
+  },
+  async setCover(uuid: string, printing: string | null) {
+    const { data } = await api.post<DeckDetail>(`/decks/${uuid}/set-cover/`, { printing });
     return data;
   },
 };

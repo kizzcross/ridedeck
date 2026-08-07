@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { Minus, Plus, X } from "lucide-react";
+import { ImageIcon, Minus, Plus, X } from "lucide-react";
 import type { DeckEntry, Zone } from "@/api/decks";
 import type { CardListItem } from "@/api/cards";
 import { GRADE_COLORS } from "@/lib/cardMeta";
@@ -9,15 +9,19 @@ import { cn } from "@/lib/cn";
 function EntryRow({
   entry,
   owned,
+  isCover,
   onInc,
   onDec,
   onRemove,
+  onSetCover,
 }: {
   entry: DeckEntry;
   owned?: number;
+  isCover?: boolean;
   onInc: () => void;
   onDec: () => void;
   onRemove: () => void;
+  onSetCover?: () => void;
 }) {
   const c = entry.card;
   const gradeColor = GRADE_COLORS[c.grade] ?? "var(--color-grade-0)";
@@ -44,6 +48,21 @@ function EntryRow({
         )}
       </span>
       <div className="flex items-center gap-1">
+        {onSetCover && (
+          <button
+            onClick={onSetCover}
+            aria-label={isCover ? "Carta principal (capa)" : "Usar como carta principal (capa)"}
+            title={isCover ? "É a carta principal (capa do deck)" : "Usar como carta principal"}
+            className={cn(
+              "grid h-6 w-6 place-items-center rounded-[4px] border transition-colors",
+              isCover
+                ? "border-[var(--color-accent)] text-[var(--color-accent)]"
+                : "border-transparent text-[var(--color-ink-subtle)] opacity-0 hover:text-[var(--color-accent)] group-hover:opacity-100",
+            )}
+          >
+            <ImageIcon className={cn("h-3.5 w-3.5", isCover && "fill-current")} />
+          </button>
+        )}
         <button onClick={onDec} aria-label="Menos" className="grid h-6 w-6 place-items-center rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-3)] hover:bg-[var(--color-border-strong)]">
           <Minus className="h-3 w-3" />
         </button>
@@ -66,9 +85,11 @@ export function DeckZoneColumn({
   count,
   target,
   ownedOf,
+  coverPrintingUuid,
   onInc,
   onDec,
   onRemove,
+  onSetCover,
 }: {
   zone: Zone;
   label: string;
@@ -76,9 +97,11 @@ export function DeckZoneColumn({
   count: number;
   target?: string;
   ownedOf?: (cardUuid: string) => number;
+  coverPrintingUuid?: string | null;
   onInc: (c: CardListItem, z: Zone) => void;
   onDec: (c: CardListItem, z: Zone) => void;
   onRemove: (c: CardListItem, z: Zone) => void;
+  onSetCover?: (c: CardListItem) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `zone-${zone}`, data: { zone } });
   const sorted = [...entries].sort((a, b) => a.card.grade - b.card.grade || a.card.name.localeCompare(b.card.name));
@@ -109,9 +132,11 @@ export function DeckZoneColumn({
               key={`${e.card.uuid}-${e.zone}`}
               entry={e}
               owned={ownedOf ? ownedOf(e.card.uuid) : undefined}
+              isCover={!!coverPrintingUuid && e.card.default_printing?.uuid === coverPrintingUuid}
               onInc={() => onInc(e.card, zone)}
               onDec={() => onDec(e.card, zone)}
               onRemove={() => onRemove(e.card, zone)}
+              onSetCover={onSetCover ? () => onSetCover(e.card) : undefined}
             />
           ))}
         </div>

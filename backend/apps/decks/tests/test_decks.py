@@ -154,3 +154,27 @@ def test_original_deck_edit_does_not_change_snapshot(member, deck, cards):
     from apps.decks.models import DeckSnapshot
     stored = DeckSnapshot.objects.get(uuid=snap.data["uuid"])
     assert stored.content_hash == hash_before  # snapshot immutable
+
+
+def test_set_cover_via_printing_and_card_and_clear(member, deck, cards):
+    c = client_for(member)
+    url = reverse("v1:deck-set-cover", args=[deck.uuid])
+    pr = cards[1].printings.first()
+    # via printing uuid
+    r = c.post(url, {"printing": str(pr.uuid)}, format="json")
+    assert r.status_code == 200
+    assert r.data["cover_printing_uuid"] == str(pr.uuid)
+    deck.refresh_from_db()
+    assert deck.cover_printing_id == pr.id
+    # via card uuid (resolves to its printing)
+    r2 = c.post(url, {"card": str(cards[2].uuid)}, format="json")
+    assert r2.data["cover_printing_uuid"] is not None
+    # clear
+    r3 = c.post(url, {"printing": None}, format="json")
+    assert r3.data["cover_printing_uuid"] is None
+
+
+def test_set_cover_requires_owner(member, other_member, deck):
+    r = client_for(other_member).post(
+        reverse("v1:deck-set-cover", args=[deck.uuid]), {"printing": None}, format="json")
+    assert r.status_code == 403
