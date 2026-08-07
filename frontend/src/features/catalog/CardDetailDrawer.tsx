@@ -4,6 +4,7 @@ import { cardsApi } from "@/api/cards";
 import { Badge, Drawer, Skeleton } from "@/components/ui";
 import { CardArt } from "./CardArt";
 import { FavoriteButton } from "./FavoriteButton";
+import { CommentThread } from "@/components/CommentThread";
 import { ClanIcon, NationLogo } from "@/components/NationLogo";
 import { useOwnedMap } from "@/hooks/useOwnedMap";
 import { useAuth } from "@/hooks/useAuth";
@@ -154,6 +155,8 @@ export function CardDetailDrawer({ slug, onClose }: { slug: string | null; onClo
               ))}
             </div>
           </div>
+
+          <CommentThread targetType="card" targetUuid={card.uuid} className="!bg-transparent !border-0 !p-0" />
         </div>
       )}
     </Drawer>

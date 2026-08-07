@@ -6,7 +6,6 @@ import { LandingPage } from "@/pages/LandingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-
 // Heavy routes are code-split so the main bundle stays lean (framer-motion,
 // dnd-kit and the championship UI load only when their page is visited).
 const named = <T extends string>(p: Promise<Record<T, React.ComponentType>>, k: T) =>
@@ -14,6 +13,9 @@ const named = <T extends string>(p: Promise<Record<T, React.ComponentType>>, k: 
 const CatalogPage = lazy(() => named(import("@/pages/CatalogPage"), "CatalogPage"));
 const MyDecksPage = lazy(() => named(import("@/pages/MyDecksPage"), "MyDecksPage"));
 const DeckBuilderPage = lazy(() => named(import("@/pages/DeckBuilderPage"), "DeckBuilderPage"));
+const DeckViewPage = lazy(() => named(import("@/pages/DeckViewPage"), "DeckViewPage"));
+const PublicDeckPage = lazy(() => named(import("@/pages/PublicDeckPage"), "PublicDeckPage"));
+const PublicBanlistPage = lazy(() => named(import("@/pages/PublicBanlistPage"), "PublicBanlistPage"));
 const CollectionPage = lazy(() => named(import("@/pages/CollectionPage"), "CollectionPage"));
 const BanlistsPage = lazy(() => named(import("@/pages/BanlistsPage"), "BanlistsPage"));
 const BanlistDetailPage = lazy(() => named(import("@/pages/BanlistDetailPage"), "BanlistDetailPage"));
@@ -33,6 +35,8 @@ export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
   { path: "/overlay/:uuid", element: <Suspense fallback={null}><OverlayPage /></Suspense> },
+  { path: "/d/:uuid", element: <Suspense fallback={null}><PublicDeckPage /></Suspense> },
+  { path: "/b/:uuid", element: <Suspense fallback={null}><PublicBanlistPage /></Suspense> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -46,6 +50,7 @@ export const router = createBrowserRouter([
           { path: "u/:username", element: <PublicProfilePage /> },
           { path: "decks", element: <MyDecksPage /> },
           { path: "decks/:uuid", element: <DeckBuilderPage /> },
+          { path: "decks/:uuid/view", element: <DeckViewPage /> },
           { path: "collection", element: <CollectionPage /> },
           { path: "banlists", element: <BanlistsPage /> },
           { path: "banlists/:uuid", element: <BanlistDetailPage /> },

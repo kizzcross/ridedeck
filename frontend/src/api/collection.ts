@@ -42,9 +42,9 @@ export interface CollectionReport {
 }
 
 export const collectionApi = {
-  async list(search = "") {
+  async list(search = "", era = "") {
     const { data } = await api.get<Paginated<CollectionItem>>("/collection/", {
-      params: { search: search || undefined, page_size: 60 },
+      params: { search: search || undefined, era: era || undefined, page_size: 60 },
     });
     return data;
   },

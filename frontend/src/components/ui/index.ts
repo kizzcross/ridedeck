@@ -5,3 +5,4 @@ export { Badge } from "./Badge";
 export { Skeleton } from "./Skeleton";
 export { ToastProvider, useToast } from "./Toast";
 export { Drawer } from "./Drawer";
+export { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";

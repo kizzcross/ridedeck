@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Crown, Lock, ListChecks, Layers, Play, Trophy, UserPlus, Swords } from "lucide-react";
+import { Check, Crown, Lock, ListChecks, Layers, Play, Trophy, Trash2, UserPlus, Swords } from "lucide-react";
 import { tournamentsApi, type Match } from "@/api/tournaments";
 import { decksApi } from "@/api/decks";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "@/components/Avatar";
-import { Badge, Button, Panel, Skeleton, useToast } from "@/components/ui";
+import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
 import { BracketView } from "@/features/tournaments/BracketView";
 import { RosterStandings } from "@/features/championship/RosterStandings";
+import { CommentThread } from "@/components/CommentThread";
 import { apiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -16,10 +17,12 @@ type Tab = "overview" | "bracket" | "standings";
 
 export function TournamentDetailPage() {
   const { uuid = "" } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: t, isLoading } = useQuery({ queryKey: ["tournament", uuid], queryFn: () => tournamentsApi.detail(uuid) });
   const { data: parts } = useQuery({ queryKey: ["t-participants", uuid], queryFn: () => tournamentsApi.participants(uuid) });
@@ -58,6 +61,15 @@ export function TournamentDetailPage() {
     mutationFn: (fn: () => Promise<Match>) => fn(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["t-bracket", uuid] }),
     onError: (e) => toast.error("Erro", apiErrorMessage(e)),
+  });
+  const del = useMutation({
+    mutationFn: () => tournamentsApi.remove(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournaments"] });
+      toast.success("Torneio excluído");
+      navigate("/app/tournaments");
+    },
+    onError: (e) => toast.error("Não foi possível excluir", apiErrorMessage(e)),
   });
   const submitDeck = useMutation({
     mutationFn: (deck: string) => tournamentsApi.submitDeck(uuid, deck),
@@ -124,6 +136,9 @@ export function TournamentDetailPage() {
             <Link to={`/app/tournaments/${uuid}/manage`}><Button size="sm" variant="secondary"><ListChecks className="h-4 w-4" /> Painel do organizador</Button></Link>
           )}
           {t.invite_code && <Badge tone="neutral">convite: {t.invite_code}</Badge>}
+          <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirmDelete(true)}>
+            <Trash2 className="h-4 w-4" /> Excluir
+          </Button>
         </Panel>
       )}
 
@@ -263,6 +278,17 @@ export function TournamentDetailPage() {
           )}
         </Panel>
       )}
+
+      <CommentThread targetType="tournament" targetUuid={uuid} />
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        title="Excluir torneio"
+        description={`"${t.name}" e todos os dados (inscrições, bracket, resultados) serão removidos.`}
+        loading={del.isPending}
+        onConfirm={() => del.mutate()}
+        onClose={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

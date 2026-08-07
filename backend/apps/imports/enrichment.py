@@ -14,6 +14,7 @@ from apps.cards.models import Card
 from .adapters.fandom import (
     CLAN_TO_NATION,
     NATION_CATEGORIES,
+    TRIGGER_CATEGORIES,
     FandomClient,
     base_name,
 )
@@ -34,6 +35,17 @@ def enrich_from_fandom(*, rate_limit_per_sec: float = 5.0, log=logger.info) -> d
 
     nation_by_id: dict[int, str] = {}
     clan_by_id: dict[int, str] = {}
+    trigger_by_id: dict[int, str] = {}
+
+    # Pass 0 — triggers (TCGplayer doesn't expose trigger type reliably).
+    for category, slug in TRIGGER_CATEGORIES.items():
+        titles = client.category_members(category)
+        hits = 0
+        for title in titles:
+            for cid in index.get(base_name(title), ()):
+                trigger_by_id[cid] = slug
+                hits += 1
+        log(f"trigger '{category}': {len(titles)} wiki cards → {hits} matched")
 
     # Pass A — nations (authoritative)
     for category, slug in NATION_CATEGORIES.items():
@@ -62,26 +74,36 @@ def enrich_from_fandom(*, rate_limit_per_sec: float = 5.0, log=logger.info) -> d
     # Bulk apply
     updated = 0
     to_update: list[Card] = []
-    touched_ids = set(nation_by_id) | set(clan_by_id)
-    for card in Card.objects.filter(id__in=touched_ids).only("id", "nation", "clan"):
+    touched_ids = set(nation_by_id) | set(clan_by_id) | set(trigger_by_id)
+    for card in Card.objects.filter(id__in=touched_ids).only(
+            "id", "nation", "clan", "trigger", "card_type", "grade"):
         changed = False
         new_nation = nation_by_id.get(card.id)
         new_clan = clan_by_id.get(card.id)
+        new_trigger = trigger_by_id.get(card.id)
         if new_nation and card.nation != new_nation:
             card.nation = new_nation
             changed = True
         if new_clan and card.clan != new_clan:
             card.clan = new_clan
             changed = True
+        if new_trigger and card.trigger != new_trigger:
+            card.trigger = new_trigger
+            # A card with a trigger is a Trigger Unit.
+            if card.card_type == "normal_unit":
+                card.card_type = "trigger_unit"
+            changed = True
         if changed:
             to_update.append(card)
     if to_update:
-        Card.objects.bulk_update(to_update, ["nation", "clan"], batch_size=500)
+        Card.objects.bulk_update(to_update, ["nation", "clan", "trigger", "card_type"],
+                                 batch_size=500)
         updated = len(to_update)
 
     stats = {
         "cards_with_nation": len(nation_by_id),
         "cards_with_clan": len(clan_by_id),
+        "cards_with_trigger": len(trigger_by_id),
         "updated": updated,
     }
     log(f"enrichment done: {stats}")

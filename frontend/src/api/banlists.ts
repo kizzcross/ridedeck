@@ -99,6 +99,13 @@ export const banlistsApi = {
     const { data } = await api.post<BanlistDetail>("/banlists/", payload);
     return data;
   },
+  async update(
+    uuid: string,
+    payload: Partial<{ name: string; format_code: string; objective: string; description: string; is_public: boolean; is_listed: boolean }>,
+  ) {
+    const { data } = await api.patch<BanlistDetail>(`/banlists/${uuid}/`, payload);
+    return data;
+  },
   async addEntry(uuid: string, entry: { restriction_type: string; card?: string; group?: string; limit_value?: number }) {
     const { data } = await api.post<BanlistVersion>(`/banlists/${uuid}/entry/`, entry);
     return data;
@@ -107,12 +114,32 @@ export const banlistsApi = {
     const { data } = await api.post<BanlistVersion>(`/banlists/${uuid}/group/`, group);
     return data;
   },
+  async removeGroup(uuid: string, groupUuid: string) {
+    const { data } = await api.delete<BanlistVersion>(`/banlists/${uuid}/group/`, { data: { group: groupUuid } });
+    return data;
+  },
   async fork(uuid: string) {
     const { data } = await api.post<BanlistDetail>(`/banlists/${uuid}/fork/`);
     return data;
+  },
+  async remove(uuid: string) {
+    await api.delete(`/banlists/${uuid}/`);
   },
   async makeOfficial(uuid: string, official = true) {
     const { data } = await api.post<{ is_official: boolean }>(`/banlists/${uuid}/make-official/`, { official });
     return data;
   },
+  async restrictionMap(uuid: string) {
+    const { data } = await api.get<{ format_code: string; restrictions: Record<string, RestrictionInfo> }>(
+      `/banlists/${uuid}/restriction-map/`,
+    );
+    return data.restrictions;
+  },
 };
+
+export interface RestrictionInfo {
+  type: string;
+  limit: number;
+  group?: string;
+  group_kind?: string;
+}

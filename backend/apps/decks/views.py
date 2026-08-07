@@ -43,6 +43,14 @@ class DeckViewSet(viewsets.ModelViewSet):
             mine = self.request.query_params.get("mine")
             if mine and user.is_authenticated:
                 return base.filter(owner=user)
+            # Another user's public decks (community browsing).
+            owner = self.request.query_params.get("owner")
+            if owner:
+                q = Q(owner__username__iexact=owner, visibility=Visibility.PUBLIC)
+                if user.is_authenticated:
+                    # you always see your own, whatever the visibility
+                    q |= Q(owner__username__iexact=owner, owner=user)
+                return base.filter(q)
             # public catalog (+ your own, whatever their visibility)
             q = Q(visibility=Visibility.PUBLIC)
             if user.is_authenticated:
@@ -148,12 +156,15 @@ class DeckViewSet(viewsets.ModelViewSet):
             owned = owned_map(request.user)
 
         banlist_version = None
+        from apps.banlists.models import Banlist
         banlist_uuid = request.query_params.get("banlist")
+        bl = None
         if banlist_uuid:
-            from apps.banlists.models import Banlist
             bl = Banlist.objects.filter(uuid=banlist_uuid).select_related("current_version").first()
-            if bl:
-                banlist_version = bl.current_version
+        elif deck.check_banlist_id:
+            bl = deck.check_banlist  # the deck's persisted checking banlist
+        if bl:
+            banlist_version = bl.current_version
 
         from apps.validation.service import validate_deck_version
         return Response(validate_deck_version(version, owned_map=owned,

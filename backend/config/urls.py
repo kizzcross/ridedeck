@@ -18,6 +18,7 @@ api_v1 = [
     path("", include("apps.collection.urls")),
     path("", include("apps.tournaments.urls")),
     path("", include("apps.imports.urls")),
+    path("", include("apps.community.urls")),
 ]
 
 urlpatterns = [

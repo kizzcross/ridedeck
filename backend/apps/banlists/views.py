@@ -11,7 +11,7 @@ from apps.cards.models import Card
 from apps.common.models import record_audit
 from apps.common.permissions import IsPlatformAdmin
 
-from .choices import BanlistCategory
+from .choices import BanlistCategory, RestrictionType
 from .models import (
     Banlist,
     BanlistComment,
@@ -49,6 +49,15 @@ class BanlistViewSet(viewsets.ModelViewSet):
             "owner", "current_version"
         )
         if self.action == "list":
+            # Another user's public/listed banlists (community browsing).
+            owner = self.request.query_params.get("owner")
+            if owner:
+                q = Q(owner__username__iexact=owner) & (
+                    Q(is_public=True, is_listed=True) | Q(category=BanlistCategory.OFFICIAL)
+                )
+                if user.is_authenticated:
+                    q |= Q(owner__username__iexact=owner, owner=user)
+                return base.filter(q)
             q = Q(category=BanlistCategory.OFFICIAL) | Q(is_public=True, is_listed=True)
             if user.is_authenticated:
                 q |= Q(owner=user)
@@ -145,11 +154,26 @@ class BanlistViewSet(viewsets.ModelViewSet):
         version.refresh_from_db()
         return Response(BanlistVersionSerializer(version).data)
 
+    # A choice/max group needs a BanlistEntry pointing at it, otherwise it is
+    # orphaned and never shows up in the version's entries.
+    _GROUP_KIND_TO_RESTRICTION = {
+        "choice": RestrictionType.CHOICE_RESTRICTION,
+        "max_distinct": RestrictionType.MAX_DISTINCT_FROM_GROUP,
+        "max_total": RestrictionType.MAX_TOTAL_FROM_GROUP,
+    }
+
     @extend_schema(request=GroupWriteSerializer)
-    @action(detail=True, methods=["post"], url_path="group")
+    @action(detail=True, methods=["post", "delete"], url_path="group")
     def group(self, request, uuid=None):
         banlist = self.get_object()
         version = ensure_draft_version(banlist)
+        if request.method == "DELETE":
+            # Deleting the group cascades to its entry and members.
+            version.restriction_groups.filter(uuid=request.data.get("group")).delete()
+            banlist.save(update_fields=["updated_at"])
+            version.refresh_from_db()
+            return Response(BanlistVersionSerializer(version).data)
+
         s = GroupWriteSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
@@ -158,6 +182,12 @@ class BanlistViewSet(viewsets.ModelViewSet):
                 version=version, name=d["name"], kind=d["kind"], limit_value=d["limit_value"])
             for card in Card.objects.filter(uuid__in=d["members"]):
                 RestrictionGroupMember.objects.create(group=grp, card=card)
+            BanlistEntry.objects.create(
+                version=version, group=grp,
+                restriction_type=self._GROUP_KIND_TO_RESTRICTION.get(
+                    d["kind"], RestrictionType.CHOICE_RESTRICTION),
+            )
+        banlist.save(update_fields=["updated_at"])
         version.refresh_from_db()
         return Response(BanlistVersionSerializer(version).data, status=status.HTTP_201_CREATED)
 
@@ -179,6 +209,32 @@ class BanlistViewSet(viewsets.ModelViewSet):
                      payload={"banlist": banlist.name, "previous": previous,
                               "new": banlist.category})
         return Response({"category": banlist.category, "is_official": banlist.is_official})
+
+    @action(detail=True, methods=["get"], url_path="restriction-map")
+    def restriction_map(self, request, uuid=None):
+        """{card_uuid: {type, limit, group}} for the current version — lets the
+        deck builder mark banned/limited cards inline."""
+        banlist = self.get_object()
+        version = banlist.current_version
+        result: dict[str, dict] = {}
+        if not version:
+            return Response({"format_code": banlist.format_code, "restrictions": {}})
+        for entry in version.entries.select_related("card", "group").prefetch_related(
+                "group__members__card"):
+            if entry.card_id:
+                result[str(entry.card.uuid)] = {
+                    "type": entry.restriction_type,
+                    "limit": entry.effective_limit(),
+                }
+            elif entry.group_id:
+                for m in entry.group.members.all():
+                    result.setdefault(str(m.card.uuid), {
+                        "type": entry.restriction_type,
+                        "limit": entry.group.limit_value,
+                        "group": entry.group.name,
+                        "group_kind": entry.group.kind,
+                    })
+        return Response({"format_code": banlist.format_code, "restrictions": result})
 
     @action(detail=True, methods=["post"])
     def fork(self, request, uuid=None):

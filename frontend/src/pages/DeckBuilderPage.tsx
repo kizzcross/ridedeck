@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   DragOverlay,
@@ -10,9 +10,10 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3, Upload } from "lucide-react";
+import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3, Trash2, Share2, Upload } from "lucide-react";
 import { ImportListModal } from "@/features/import/ImportListModal";
 import { decksApi, type Visibility, type Zone } from "@/api/decks";
+import { banlistsApi } from "@/api/banlists";
 import type { CardListItem } from "@/api/cards";
 import { useDeckBuilder } from "@/features/builder/useDeckBuilder";
 import { useOwnedMap } from "@/hooks/useOwnedMap";
@@ -23,15 +24,19 @@ import { ShoppingList } from "@/features/builder/ShoppingList";
 import { DeckPowerPanel } from "@/features/builder/DeckPowerPanel";
 import { CardArt } from "@/features/catalog/CardArt";
 import { ZONES } from "@/features/builder/zones";
-import { Badge, Button, Panel, Skeleton, useToast } from "@/components/ui";
+import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
+import { useMutation } from "@tanstack/react-query";
 import { cn } from "@/lib/cn";
 
 const FORMAT_TARGETS: Record<string, Partial<Record<Zone, string>>> = {
   standard: { main_deck: "50", ride_deck: "5" },
   v_premium: { main_deck: "50" },
   premium: { main_deck: "50" },
+  g: { main_deck: "50" },
 };
-const FORMAT_LABEL: Record<string, string> = { standard: "Standard", v_premium: "V Premium", premium: "Premium" };
+const FORMAT_LABEL: Record<string, string> = {
+  standard: "Standard", v_premium: "V Premium", premium: "Premium", g: "G Era",
+};
 const SAVE_LABEL = { idle: "", saving: "Salvando…", saved: "Salvo", error: "Erro ao salvar" };
 const MOBILE_TABS = [
   { key: "cards", label: "Cartas", icon: Library },
@@ -42,13 +47,25 @@ type MobileTab = (typeof MOBILE_TABS)[number]["key"];
 
 export function DeckBuilderPage() {
   const { uuid = "" } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const qc = useQueryClient();
   const b = useDeckBuilder(uuid);
   const { ownedOf } = useOwnedMap();
   const [dragging, setDragging] = useState<CardListItem | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const del = useMutation({
+    mutationFn: () => decksApi.remove(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["decks"] });
+      toast.success("Deck excluído");
+      navigate("/app/decks");
+    },
+    onError: () => toast.error("Não foi possível excluir"),
+  });
   const [visibility, setVisibility] = useState<Visibility | null>(null);
   const [format, setFormat] = useState<string | null>(null);
+  const [banlist, setBanlist] = useState<string | null | undefined>(undefined);
   const [tab, setTab] = useState<MobileTab>("cards");
   const [importOpen, setImportOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -57,12 +74,36 @@ export function DeckBuilderPage() {
     if (b.deck) {
       setVisibility((v) => v ?? b.deck!.visibility);
       setFormat((f) => f ?? b.deck!.format_code);
+      setBanlist((bl) => (bl === undefined ? b.deck!.check_banlist_uuid : bl));
     }
   }, [b.deck]);
 
   const vis = visibility ?? b.deck?.visibility ?? "private";
   const fmt = format ?? b.deck?.format_code ?? "standard";
+  const selectedBanlist = banlist ?? null;
   const targets = FORMAT_TARGETS[fmt] ?? {};
+
+  // Banlists selectable for this format (official + community).
+  const { data: banlistsData } = useQuery({
+    queryKey: ["banlists-for-format", fmt],
+    queryFn: () => banlistsApi.list({ format_code: fmt }),
+  });
+  const banlistOptions = banlistsData?.results ?? [];
+
+  // Restriction map for the selected banlist → mark banned/limited cards.
+  const { data: restrictions } = useQuery({
+    queryKey: ["banlist-restrictions", selectedBanlist],
+    queryFn: () => banlistsApi.restrictionMap(selectedBanlist!),
+    enabled: !!selectedBanlist,
+  });
+
+  const changeBanlist = async (uuidValue: string) => {
+    const value = uuidValue || null;
+    setBanlist(value);
+    await decksApi.update(uuid, { check_banlist_uuid: value });
+    qc.invalidateQueries({ queryKey: ["deck-validate", uuid] });
+    b.refetch();
+  };
 
   const onDragStart = (e: DragStartEvent) => setDragging((e.active.data.current?.card as CardListItem) ?? null);
   const onDragEnd = (e: DragEndEvent) => {
@@ -91,7 +132,7 @@ export function DeckBuilderPage() {
 
   const VisIcon = vis === "public" ? Globe : vis === "unlisted" ? Link2 : Lock;
 
-  const cardsPanel = <CardSearchPanel onAdd={b.add} formatCode={fmt} />;
+  const cardsPanel = <CardSearchPanel onAdd={b.add} formatCode={fmt} restrictions={restrictions} />;
   const deckPanel = (
     <div className="space-y-3">
       {ZONES.map((z) => (
@@ -159,6 +200,21 @@ export function DeckBuilderPage() {
             <option value="standard">Standard</option>
             <option value="v_premium">V Premium</option>
             <option value="premium">Premium</option>
+            <option value="g">G Era</option>
+          </select>
+          <select
+            value={selectedBanlist ?? ""}
+            onChange={(e) => changeBanlist(e.target.value)}
+            className="h-8 max-w-[9rem] rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs"
+            aria-label="Banlist para validar"
+            title="Valide o deck contra uma banlist"
+          >
+            <option value="">Sem banlist</option>
+            {banlistOptions.map((bl) => (
+              <option key={bl.uuid} value={bl.uuid}>
+                {bl.is_official ? "★ " : ""}{bl.name}
+              </option>
+            ))}
           </select>
           <select
             value={vis}
@@ -173,8 +229,25 @@ export function DeckBuilderPage() {
           <Badge tone={vis === "public" ? "success" : "neutral"} className="hidden sm:inline-flex">
             <VisIcon className="h-3 w-3" /> {vis}
           </Badge>
+          <a href={`/d/${uuid}`} target="_blank" rel="noreferrer" title="Ver página de compartilhamento">
+            <Button size="sm" variant="ghost" aria-label="Compartilhar deck">
+              <Share2 className="h-4 w-4" />
+            </Button>
+          </a>
+          <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)} aria-label="Excluir deck" title="Excluir deck">
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        title="Excluir deck"
+        description={`"${b.deck.title}" será removido permanentemente.`}
+        loading={del.isPending}
+        onConfirm={() => del.mutate()}
+        onClose={() => setConfirmDelete(false)}
+      />
 
       {/* Mobile tab switcher */}
       <div className="mb-3 grid grid-cols-3 gap-1 lg:hidden">

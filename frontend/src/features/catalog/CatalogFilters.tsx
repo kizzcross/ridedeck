@@ -128,6 +128,7 @@ export function CatalogFilters({
           ["standard", "Standard"],
           ["v_premium", "V Premium"],
           ["premium", "Premium"],
+          ["g", "G Era"],
         ]}
       />
     </div>

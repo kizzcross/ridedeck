@@ -35,6 +35,17 @@ NATION_CATEGORIES: dict[str, str] = {
     "Star Gate": "star_gate",
 }
 
+# Trigger categories → trigger slug. TCGplayer doesn't expose trigger type, so we
+# take it from the wiki (Heal/Over don't contain their word in the card text).
+TRIGGER_CATEGORIES: dict[str, str] = {
+    "Critical Trigger": "critical",
+    "Draw Trigger": "draw",
+    "Heal Trigger": "heal",
+    "Front Trigger": "front",
+    "Stand Trigger": "stand",
+    "Over Trigger": "over",
+}
+
 # Clan categories → clan name + the nation it belongs to (for cards the nation
 # category crawl might miss). Nation crawl still takes precedence.
 CLAN_TO_NATION: dict[str, str] = {

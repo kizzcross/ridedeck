@@ -66,21 +66,39 @@ class DeckDetailSerializer(serializers.ModelSerializer):
         fields = ["uuid", "title", "description", "format_code", "visibility", "owner",
                   "nation_focus", "clan_focus", "archetype", "tags", "guide", "combos",
                   "matchups", "side_notes", "changelog", "like_count", "favorite_count",
-                  "power_stars", "forked_from", "current_version", "is_owner",
-                  "created_at", "updated_at"]
+                  "power_stars", "forked_from", "check_banlist_uuid", "check_banlist_name",
+                  "current_version", "is_owner", "created_at", "updated_at"]
         read_only_fields = ["like_count", "favorite_count", "forked_from"]
+
+    check_banlist_uuid = serializers.SerializerMethodField()
+    check_banlist_name = serializers.SerializerMethodField()
 
     def get_is_owner(self, obj) -> bool:
         request = self.context.get("request")
         return bool(request and request.user.is_authenticated and obj.owner_id == request.user.id)
 
+    def get_check_banlist_uuid(self, obj):
+        return str(obj.check_banlist.uuid) if obj.check_banlist_id else None
+
+    def get_check_banlist_name(self, obj):
+        return obj.check_banlist.name if obj.check_banlist_id else None
+
 
 class DeckWriteSerializer(serializers.ModelSerializer):
+    check_banlist_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = Deck
         fields = ["title", "description", "format_code", "visibility", "nation_focus",
                   "clan_focus", "archetype", "guide", "combos", "matchups", "side_notes",
-                  "changelog", "power_stars"]
+                  "changelog", "power_stars", "check_banlist_uuid"]
+
+    def update(self, instance, validated_data):
+        if "check_banlist_uuid" in validated_data:
+            from apps.banlists.models import Banlist
+            bl_uuid = validated_data.pop("check_banlist_uuid")
+            instance.check_banlist = Banlist.objects.filter(uuid=bl_uuid).first() if bl_uuid else None
+        return super().update(instance, validated_data)
 
 
 class SetEntrySerializer(serializers.Serializer):

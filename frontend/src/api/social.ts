@@ -98,6 +98,12 @@ export const profileApi = {
     const { data } = await api.get<PublicProfile>(`/users/${username}/`);
     return data;
   },
+  async userFavoriteCards(username: string): Promise<FavoriteCard[]> {
+    const { data } = await api.get<Paginated<FavoriteCard>>(`/users/${username}/favorite-cards/`, {
+      params: { page_size: 60 },
+    });
+    return data.results;
+  },
   async updateProfile(payload: Record<string, unknown>) {
     const { data } = await api.patch("/me/profile/", payload);
     return data;

@@ -9,7 +9,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('decks', '0002_deck_power_stars'),
+        ('decks', '0003_deck_power_stars'),
         ('tournaments', '0003_remove_tournament_power_policy'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]

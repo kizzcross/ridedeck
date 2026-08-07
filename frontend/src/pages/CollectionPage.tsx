@@ -7,6 +7,7 @@ import { useOwnedMap } from "@/hooks/useOwnedMap";
 import { CardArt } from "@/features/catalog/CardArt";
 import { CardDetailDrawer } from "@/features/catalog/CardDetailDrawer";
 import { Badge, Panel, Skeleton } from "@/components/ui";
+import { cn } from "@/lib/cn";
 
 function OwnedTile({ item, onOpen }: { item: CollectionItem; onOpen: (slug: string) => void }) {
   return (
@@ -23,12 +24,13 @@ function OwnedTile({ item, onOpen }: { item: CollectionItem; onOpen: (slug: stri
 export function CollectionPage() {
   const [raw, setRaw] = useState("");
   const search = useDebounce(raw, 300);
+  const [era, setEra] = useState("");
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   useOwnedMap(); // keep owned map warm for the drawer control
 
   const { data, isLoading } = useQuery({
-    queryKey: ["collection", search],
-    queryFn: () => collectionApi.list(search),
+    queryKey: ["collection", search, era],
+    queryFn: () => collectionApi.list(search, era),
   });
   const { data: summary } = useQuery({ queryKey: ["collection-summary"], queryFn: collectionApi.summary });
 
@@ -43,14 +45,37 @@ export function CollectionPage() {
         </div>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-subtle)]" />
-        <input
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          placeholder="Buscar na coleção…"
-          className="h-10 w-full rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-3 text-sm focus:border-[var(--color-accent)]"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-subtle)]" />
+          <input
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="Buscar na coleção…"
+            className="h-10 w-full rounded-[var(--radius-card)] border-2 border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-3 text-sm focus:border-[var(--color-accent)]"
+          />
+        </div>
+        <div className="flex gap-1">
+          {[
+            ["", "Todas"],
+            ["g", "G era"],
+            ["d", "D era"],
+            ["v", "V era"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setEra(value)}
+              className={cn(
+                "font-display h-10 rounded-[var(--radius-card)] border-2 px-3 text-[11px] uppercase",
+                era === value
+                  ? "border-[var(--color-border)] bg-[var(--color-accent)] text-[#1a1400]"
+                  : "border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-ink-muted)]",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (

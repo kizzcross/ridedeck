@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('decks', '0001_initial'),
+        ('decks', '0002_deck_check_banlist'),
     ]
 
     operations = [

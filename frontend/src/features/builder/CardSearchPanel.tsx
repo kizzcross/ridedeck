@@ -9,27 +9,65 @@ import { Button, Skeleton } from "@/components/ui";
 import { defaultZoneForGrade } from "./zones";
 import { cn } from "@/lib/cn";
 import type { Zone } from "@/api/decks";
+import type { RestrictionInfo } from "@/api/banlists";
 
-function DraggableCard({ card, onAdd }: { card: CardListItem; onAdd: (c: CardListItem, z: Zone) => void }) {
+const RESTRICTION_LABEL: Record<string, string> = {
+  banned: "BANIDA",
+  limit_to_1: "MÁX 1",
+  limit_to_2: "MÁX 2",
+  limit_to_n: "LIMITE",
+  first_vanguard_forbidden: "1ª VG PROIBIDA",
+  choice_restriction: "CHOICE",
+  max_distinct_from_group: "GRUPO",
+  max_total_from_group: "GRUPO",
+};
+
+function DraggableCard({
+  card,
+  restriction,
+  onAdd,
+}: {
+  card: CardListItem;
+  restriction?: RestrictionInfo;
+  onAdd: (c: CardListItem, z: Zone) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `search-${card.uuid}`,
     data: { card },
+    disabled: restriction?.type === "banned",
   });
+  const banned = restriction?.type === "banned";
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
+      {...(banned ? {} : listeners)}
       {...attributes}
-      className={`group relative cursor-grab touch-none ${isDragging ? "opacity-40" : ""}`}
+      className={cn("group relative touch-none", banned ? "cursor-not-allowed" : "cursor-grab",
+        isDragging ? "opacity-40" : "")}
     >
-      <CardArt card={card} />
-      <button
-        onClick={() => onAdd(card, defaultZoneForGrade(card.grade))}
-        className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded-[4px] border-2 border-[var(--color-border)] bg-[var(--color-accent)] py-0.5 text-[10px] font-bold uppercase text-[#1a1400] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        aria-label={`Adicionar ${card.name}`}
-      >
-        <Plus className="h-3 w-3" /> Add
-      </button>
+      <div className={cn(banned && "opacity-55 grayscale")}>
+        <CardArt card={card} />
+      </div>
+      {restriction && (
+        <span
+          className={cn(
+            "font-display absolute left-1 top-1 z-10 rounded-[3px] border-2 border-[var(--color-border)] px-1 py-0.5 text-[8px] uppercase",
+            banned ? "bg-[var(--color-danger)] text-[#2a0000]" : "bg-[var(--color-warning)] text-[#1a1400]",
+          )}
+          title={restriction.group ? `Grupo: ${restriction.group}` : RESTRICTION_LABEL[restriction.type]}
+        >
+          {RESTRICTION_LABEL[restriction.type] ?? "RESTRITA"}
+        </span>
+      )}
+      {!banned && (
+        <button
+          onClick={() => onAdd(card, defaultZoneForGrade(card.grade))}
+          className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded-[4px] border-2 border-[var(--color-border)] bg-[var(--color-accent)] py-0.5 text-[10px] font-bold uppercase text-[#1a1400] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          aria-label={`Adicionar ${card.name}`}
+        >
+          <Plus className="h-3 w-3" /> Add
+        </button>
+      )}
     </div>
   );
 }
@@ -39,9 +77,11 @@ const GRADE_TABS = ["", "0", "1", "2", "3", "4"];
 export function CardSearchPanel({
   onAdd,
   formatCode,
+  restrictions,
 }: {
   onAdd: (c: CardListItem, z: Zone) => void;
   formatCode?: string;
+  restrictions?: Record<string, RestrictionInfo>;
 }) {
   const [raw, setRaw] = useState("");
   const search = useDebounce(raw, 300);
@@ -137,7 +177,7 @@ export function CardSearchPanel({
           <>
             <div className="grid grid-cols-3 gap-2">
               {cards.map((c) => (
-                <DraggableCard key={c.uuid} card={c} onAdd={onAdd} />
+                <DraggableCard key={c.uuid} card={c} restriction={restrictions?.[c.uuid]} onAdd={onAdd} />
               ))}
             </div>
             {query.hasNextPage && (

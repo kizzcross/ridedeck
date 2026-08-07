@@ -34,6 +34,13 @@ FORMATS = [
         "triggers": {"total": 16, "over": 0, "counted": ["main_deck"], "per_type": {"heal": 4}},
         "construction": {"copies": 4, "nation_locked": False},
     },
+    {
+        # G era: Main 50 + G Zone (até 16), sem Ride Deck, travado por Clan.
+        "code": "g", "name": "G Era", "sort_order": 4,
+        "zones": {"main_deck": (50, 50), "ride_deck": (0, 0), "g_deck": (0, 16)},
+        "triggers": {"total": 16, "over": 0, "counted": ["main_deck"], "per_type": {"heal": 4}},
+        "construction": {"copies": 4, "nation_locked": False, "clan_locked": True},
+    },
 ]
 
 
