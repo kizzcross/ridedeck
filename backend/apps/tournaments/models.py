@@ -11,13 +11,27 @@ from django.db import models
 from apps.common.models import BaseModel, SoftDeleteModel
 
 from .choices import (
+    AceEventKind,
+    AceReveal,
+    AceRule,
     BracketType,
     DecklistVisibility,
+    DeckSelectionMode,
+    DrawTiming,
+    FormatKind,
     MatchState,
     ParticipantStatus,
+    PenaltyKind,
     RegistrationStatus,
+    RosterStatus,
+    RosterVisibility,
     RoundStatus,
+    SeedSource,
+    SelectionMethod,
+    SequenceOpponentVisibility,
+    SequenceSelfVisibility,
     StaffRole,
+    TournamentKind,
     TournamentStatus,
     Visibility,
 )
@@ -34,13 +48,62 @@ class Tournament(BaseModel, SoftDeleteModel):
     banlist = models.ForeignKey("banlists.Banlist", on_delete=models.SET_NULL, null=True,
                                 blank=True, related_name="tournaments")
     banlist_version_number = models.PositiveIntegerField(null=True, blank=True)
-    power_policy = models.ForeignKey("powerlevel.TournamentPowerPolicy", on_delete=models.SET_NULL,
-                                     null=True, blank=True, related_name="tournaments")
     custom_rules = models.JSONField(default=dict, blank=True)
 
     bracket_type = models.CharField(max_length=24, choices=BracketType.choices,
                                     default=BracketType.SINGLE_ELIMINATION)
     max_participants = models.PositiveIntegerField(default=32)
+
+    # --- Roster championship mode (kind == "roster"). All fields carry safe
+    # defaults so a standard tournament ignores them entirely. -----------------
+    kind = models.CharField(max_length=12, choices=TournamentKind.choices,
+                            default=TournamentKind.STANDARD, db_index=True)
+    format_kind = models.CharField(max_length=8, choices=FormatKind.choices,
+                                   default=FormatKind.POINTS)
+    league_double_round = models.BooleanField(default=False)
+    rounds_count = models.PositiveSmallIntegerField(null=True, blank=True)
+    seed_source = models.CharField(max_length=20, choices=SeedSource.choices,
+                                   default=SeedSource.RANDOM)
+    hybrid_advance_count = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    decks_per_player = models.PositiveSmallIntegerField(default=4)
+    power_cap = models.PositiveSmallIntegerField(default=15)
+    min_deck_power = models.PositiveSmallIntegerField(null=True, blank=True)
+    max_deck_power = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    deck_selection_mode = models.CharField(max_length=24, choices=DeckSelectionMode.choices,
+                                           default=DeckSelectionMode.RANDOM_ROTATION)
+    random_options_count = models.PositiveSmallIntegerField(default=2)
+    draw_timing = models.CharField(max_length=20, choices=DrawTiming.choices,
+                                   default=DrawTiming.AUTO_ROUND_START)
+    sequence_self_visibility = models.CharField(max_length=12,
+                                                choices=SequenceSelfVisibility.choices,
+                                                default=SequenceSelfVisibility.EACH_ROUND)
+    sequence_opponent_visibility = models.CharField(max_length=8,
+                                                    choices=SequenceOpponentVisibility.choices,
+                                                    default=SequenceOpponentVisibility.HIDDEN)
+
+    roster_visibility = models.CharField(max_length=8, choices=RosterVisibility.choices,
+                                         default=RosterVisibility.PARTIAL)
+    reveal_lists_after_end = models.BooleanField(default=True)
+
+    ace_enabled = models.BooleanField(default=False)
+    ace_rule = models.CharField(max_length=20, choices=AceRule.choices,
+                                default=AceRule.VISUAL_ONLY)
+    ace_reveal = models.CharField(max_length=24, choices=AceReveal.choices,
+                                  default=AceReveal.PUBLIC)
+    ace_required = models.BooleanField(default=False)
+
+    allow_draws = models.BooleanField(default=True)
+    points_win = models.PositiveSmallIntegerField(default=3)
+    points_draw = models.PositiveSmallIntegerField(default=1)
+    points_loss = models.PositiveSmallIntegerField(default=0)
+    points_bye = models.PositiveSmallIntegerField(default=3)
+
+    registration_opens_at = models.DateTimeField(null=True, blank=True)
+    registration_closes_at = models.DateTimeField(null=True, blank=True)
+    checkin_opens_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
 
     starts_at = models.DateTimeField(null=True, blank=True)
     timezone = models.CharField(max_length=48, default="UTC")
@@ -75,6 +138,10 @@ class Tournament(BaseModel, SoftDeleteModel):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def is_roster(self) -> bool:
+        return self.kind == TournamentKind.ROSTER
 
     def is_organizer(self, user) -> bool:
         if not (user and user.is_authenticated):
@@ -306,3 +373,148 @@ class TournamentAuditLog(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.action} @ {self.tournament_id}"
+
+
+# =============================================================================
+# Roster championship models (kind == "roster")
+# =============================================================================
+class TournamentRoster(BaseModel):
+    """A participant's pool of decks for a roster championship. Sum of the
+    owner-assigned deck powers must stay within the tournament's power_cap."""
+
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="rosters")
+    participant = models.OneToOneField(TournamentParticipant, on_delete=models.CASCADE,
+                                       related_name="roster")
+    status = models.CharField(max_length=12, choices=RosterStatus.choices,
+                              default=RosterStatus.DRAFT, db_index=True)
+    power_used = models.PositiveSmallIntegerField(default=0)   # sum of assigned deck powers
+    is_over_cap = models.BooleanField(default=False)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"roster {self.participant_id} @ {self.tournament_id}"
+
+
+class RosterDeck(BaseModel):
+    """One deck in a roster. `power` is assigned by the tournament OWNER (not the
+    deck owner); `snapshot` freezes the decklist when the roster locks."""
+
+    roster = models.ForeignKey(TournamentRoster, on_delete=models.CASCADE, related_name="decks")
+    source_deck = models.ForeignKey("decks.Deck", on_delete=models.SET_NULL, null=True,
+                                    related_name="+")
+    snapshot = models.ForeignKey("decks.DeckSnapshot", on_delete=models.SET_NULL, null=True,
+                                 blank=True, related_name="+")
+    power = models.PositiveSmallIntegerField(null=True, blank=True)  # owner-assigned
+    power_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                 blank=True, related_name="+")
+    is_ace = models.BooleanField(default=False)
+    banlist_valid = models.BooleanField(default=True)
+    is_valid = models.BooleanField(default=False)
+    validation = models.JSONField(default=dict, blank=True)
+    label = models.CharField(max_length=140, blank=True)   # frozen deck title
+    slot = models.PositiveSmallIntegerField(default=0)
+    order_index = models.PositiveSmallIntegerField(default=0)
+    locked = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("slot", "order_index")
+        constraints = [
+            models.UniqueConstraint(fields=["roster", "source_deck"], name="uniq_roster_deck")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.label or self.source_deck_id} (power {self.power})"
+
+
+class RosterDeckSequence(BaseModel):
+    """Frozen predetermined draw order (deck_selection_mode == predetermined_order).
+    Generated once at start; one row per (roster, round_number)."""
+
+    roster = models.ForeignKey(TournamentRoster, on_delete=models.CASCADE, related_name="sequence")
+    round_number = models.PositiveSmallIntegerField()
+    roster_deck = models.ForeignKey(RosterDeck, on_delete=models.CASCADE, related_name="+")
+    revealed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("round_number",)
+        constraints = [
+            models.UniqueConstraint(fields=["roster", "round_number"], name="uniq_roster_sequence")
+        ]
+
+
+class MatchDeckSelection(BaseModel):
+    """The deck a participant will use in a specific match. Secret until BOTH
+    sides confirm — `revealed` is only set once both selections are confirmed."""
+
+    match = models.ForeignKey(TournamentMatch, on_delete=models.CASCADE,
+                              related_name="deck_selections")
+    participant = models.ForeignKey(TournamentParticipant, on_delete=models.CASCADE,
+                                    related_name="deck_selections")
+    roster_deck = models.ForeignKey(RosterDeck, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name="selections")
+    method = models.CharField(max_length=20, choices=SelectionMethod.choices,
+                              default=SelectionMethod.RANDOM)
+    confirmed = models.BooleanField(default=False)
+    revealed = models.BooleanField(default=False)
+    is_ace_used = models.BooleanField(default=False)
+    options = models.JSONField(default=list, blank=True)    # choose_from_random: offered decks
+    eligible = models.JSONField(default=list, blank=True)    # roster_deck uuids considered
+    rule_used = models.CharField(max_length=32, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["match", "participant"], name="uniq_match_selection")
+        ]
+
+    def __str__(self) -> str:
+        return f"selection {self.participant_id} @ match {self.match_id}"
+
+
+class DeckDrawLog(BaseModel):
+    """Immutable audit of every automatic draw. Never hand-edited; a re-draw sets
+    admin_intervention=True and writes a NEW row."""
+
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="draw_logs")
+    round = models.ForeignKey(TournamentRound, on_delete=models.SET_NULL, null=True,
+                              related_name="draw_logs")
+    participant = models.ForeignKey(TournamentParticipant, on_delete=models.CASCADE,
+                                    related_name="draw_logs")
+    result_deck = models.ForeignKey(RosterDeck, on_delete=models.SET_NULL, null=True,
+                                    related_name="+")
+    eligible = models.JSONField(default=list, blank=True)
+    options = models.JSONField(default=list, blank=True)
+    rule = models.CharField(max_length=32, blank=True)
+    admin_intervention = models.BooleanField(default=False)
+    admin = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                              blank=True, related_name="+")
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["tournament", "round"])]
+
+
+class AceEvent(BaseModel):
+    """Records Ace usage/reveal for rules that consume or expose the Ace."""
+
+    roster = models.ForeignKey(TournamentRoster, on_delete=models.CASCADE, related_name="ace_events")
+    match = models.ForeignKey(TournamentMatch, on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name="+")
+    kind = models.CharField(max_length=16, choices=AceEventKind.choices)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+
+class TournamentPenalty(BaseModel):
+    participant = models.ForeignKey(TournamentParticipant, on_delete=models.CASCADE,
+                                    related_name="penalties")
+    match = models.ForeignKey(TournamentMatch, on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name="+")
+    kind = models.CharField(max_length=20, choices=PenaltyKind.choices)
+    points = models.SmallIntegerField(default=0)   # points delta (negative = deduction)
+    reason = models.CharField(max_length=255, blank=True)
+    issued_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                  related_name="+")
+
+    class Meta:
+        ordering = ("-created_at",)

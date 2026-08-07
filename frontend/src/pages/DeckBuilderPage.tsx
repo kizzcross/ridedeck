@@ -10,7 +10,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3 } from "lucide-react";
+import { Check, Cloud, Redo2, Undo2, Globe, Lock, Link2, Library, Layers, BarChart3, Upload } from "lucide-react";
+import { ImportListModal } from "@/features/import/ImportListModal";
 import { decksApi, type Visibility, type Zone } from "@/api/decks";
 import type { CardListItem } from "@/api/cards";
 import { useDeckBuilder } from "@/features/builder/useDeckBuilder";
@@ -49,6 +50,7 @@ export function DeckBuilderPage() {
   const [visibility, setVisibility] = useState<Visibility | null>(null);
   const [format, setFormat] = useState<string | null>(null);
   const [tab, setTab] = useState<MobileTab>("cards");
+  const [importOpen, setImportOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
@@ -145,6 +147,9 @@ export function DeckBuilderPage() {
           <Button size="sm" variant="ghost" disabled={!b.canRedo} onClick={b.redo} aria-label="Refazer" title="Refazer (Ctrl+Shift+Z)">
             <Redo2 className="h-4 w-4" />
           </Button>
+          <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)} title="Importar deck por lista de texto">
+            <Upload className="h-4 w-4" /> Importar
+          </Button>
           <select
             value={fmt}
             onChange={(e) => changeFormat(e.target.value)}
@@ -205,6 +210,14 @@ export function DeckBuilderPage() {
       </div>
 
       <DragOverlay>{dragging ? <div className="w-24"><CardArt card={dragging} /></div> : null}</DragOverlay>
+
+      <ImportListModal
+        open={importOpen}
+        kind="deck"
+        targetUuid={uuid}
+        onClose={() => setImportOpen(false)}
+        onApplied={() => { b.refetch(); qc.invalidateQueries({ queryKey: ["deck-validate", uuid] }); }}
+      />
     </DndContext>
   );
 }

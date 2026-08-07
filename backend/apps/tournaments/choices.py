@@ -9,6 +9,99 @@ class BracketType(models.TextChoices):
     ROUND_ROBIN = "round_robin", "Round robin"
 
 
+# --- Roster championship mode -------------------------------------------------
+class TournamentKind(models.TextChoices):
+    STANDARD = "standard", "Standard (single deck)"
+    ROSTER = "roster", "Roster championship"
+
+
+class FormatKind(models.TextChoices):
+    POINTS = "points", "Points only"
+    BRACKET = "bracket", "Bracket only"
+    HYBRID = "hybrid", "Hybrid (points → bracket)"
+
+
+class SeedSource(models.TextChoices):
+    RANDOM = "random", "Random"
+    MANUAL = "manual", "Manual"
+    PLATFORM_RANKING = "platform_ranking", "Platform ranking"
+
+
+class DeckSelectionMode(models.TextChoices):
+    MANUAL = "manual", "Manual secret pick"
+    RANDOM_FREE = "random_free", "Random — free repeats"
+    RANDOM_NO_CONSECUTIVE = "random_no_consecutive", "Random — no consecutive repeat"
+    RANDOM_ROTATION = "random_rotation", "Random — rotation (all before repeat)"
+    PREDETERMINED_ORDER = "predetermined_order", "Predetermined random order"
+    CHOOSE_FROM_RANDOM = "choose_from_random", "Choose from N random"
+
+
+class DrawTiming(models.TextChoices):
+    BEFORE_PAIRING = "before_pairing", "Before pairing"
+    AFTER_PAIRING = "after_pairing", "After pairing"
+    AUTO_ROUND_START = "auto_round_start", "Auto at round start"
+    MANUAL_OWNER = "manual_owner", "Manual by owner"
+
+
+class SequenceSelfVisibility(models.TextChoices):
+    FROM_START = "from_start", "Visible from start"
+    EACH_ROUND = "each_round", "Revealed each round"
+
+
+class SequenceOpponentVisibility(models.TextChoices):
+    PUBLIC = "public", "Public"
+    HIDDEN = "hidden", "Hidden from opponents"
+
+
+class RosterVisibility(models.TextChoices):
+    OPEN = "open", "Open"
+    PARTIAL = "partial", "Partially open"
+    CLOSED = "closed", "Closed"
+
+
+class AceRule(models.TextChoices):
+    MANUAL_ONCE = "manual_once", "Player uses Ace once"
+    REPLACE_DRAW = "replace_draw", "Ace replaces a draw once"
+    WEIGHTED_RANDOM = "weighted_random", "Ace weighted in random"
+    EXTRA_IN_ROTATION = "extra_in_rotation", "Ace appears extra in rotation"
+    TIEBREAK_WINS = "tiebreak_wins", "Ace wins as tiebreak"
+    VISUAL_ONLY = "visual_only", "Visual only"
+
+
+class AceReveal(models.TextChoices):
+    PUBLIC = "public", "Public"
+    HIDDEN_UNTIL_FIRST_USE = "hidden_until_first_use", "Hidden until first use"
+
+
+class RosterStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    VALID = "valid", "Valid"
+    INVALID = "invalid", "Invalid"
+    CONFIRMED = "confirmed", "Confirmed"
+    LOCKED = "locked", "Locked"
+
+
+class SelectionMethod(models.TextChoices):
+    MANUAL = "manual", "Manual"
+    RANDOM = "random", "Random"
+    PREDETERMINED = "predetermined", "Predetermined"
+    CHOOSE_FROM_RANDOM = "choose_from_random", "Choose from random"
+
+
+class AceEventKind(models.TextChoices):
+    USED = "used", "Used"
+    REPLACED_DRAW = "replaced_draw", "Replaced a draw"
+    REVEALED = "revealed", "Revealed"
+
+
+class PenaltyKind(models.TextChoices):
+    WARNING = "warning", "Warning"
+    GAME_LOSS = "game_loss", "Game loss"
+    MATCH_LOSS = "match_loss", "Match loss"
+    POINTS_DEDUCTION = "points_deduction", "Points deduction"
+    DISQUALIFICATION = "disqualification", "Disqualification"
+
+
 class TournamentStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     REGISTRATION = "registration", "Registration open"

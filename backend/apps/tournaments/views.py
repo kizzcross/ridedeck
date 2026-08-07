@@ -19,6 +19,7 @@ from .serializers import (
     MatchSerializer,
     ParticipantSerializer,
     RegistrationSerializer,
+    RosterSerializer,
     StageSerializer,
     StandingSerializer,
     SubmissionSerializer,
@@ -94,6 +95,12 @@ class TournamentViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         instance.soft_delete()
 
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticatedOrReadOnly])
+    def presets(self, request):
+        """Roster-championship presets that pre-fill the creation wizard."""
+        from .presets import PRESETS
+        return Response(PRESETS)
+
     # --- Lifecycle (organizer) -------------------------------------------
     @action(detail=True, methods=["post"], url_path="open-registration")
     def open_registration(self, request, uuid=None):
@@ -118,7 +125,22 @@ class TournamentViewSet(viewsets.ModelViewSet):
             dispatch_generate(t, request.user)
         except ValueError as e:
             raise ValidationError(str(e)) from e
+        # Roster mode with automatic timing: draw decks for the first round now.
+        if t.is_roster and t.draw_timing in ("auto_round_start", "after_pairing"):
+            from .selection import run_active_round_draws
+            run_active_round_draws(t, request.user)
         return Response({"status": t.status}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="run-draws")
+    def run_draws(self, request, uuid=None):
+        """Owner triggers/re-runs draws for the active round(s). A re-run is an
+        audited admin intervention."""
+        t = self.get_object()
+        self._organizer_guard(t)
+        from .selection import run_active_round_draws
+        run_active_round_draws(t, request.user,
+                               admin_intervention=bool(request.data.get("redraw")))
+        return Response({"status": "ok"})
 
     @action(detail=True, methods=["post"])
     def seeding(self, request, uuid=None):
@@ -209,6 +231,138 @@ class TournamentViewSet(viewsets.ModelViewSet):
             return Response({"submission": None})
         return Response(SubmissionSerializer(p.submission).data)
 
+    # --- Roster championship ---------------------------------------------
+    def _my_participant(self, tournament):
+        p = tournament.participants.filter(user=self.request.user).first()
+        if not p:
+            raise PermissionDenied("Inscreva-se antes de montar o roster.")
+        return p
+
+    @action(detail=True, methods=["get"], url_path="my-roster")
+    def my_roster(self, request, uuid=None):
+        from .roster import get_or_create_roster
+        t = self.get_object()
+        p = t.participants.filter(user=request.user).first()
+        if not p:
+            return Response({"roster": None})
+        roster = get_or_create_roster(t, p)
+        return Response(RosterSerializer(roster, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="add-roster-deck")
+    def add_roster_deck(self, request, uuid=None):
+        from .roster import add_roster_deck
+        t = self.get_object()
+        p = self._my_participant(t)
+        deck = Deck.objects.filter(uuid=request.data.get("deck"), owner=request.user).first()
+        if not deck:
+            return Response({"error": {"code": "not_found", "message": "Deck não encontrado."}},
+                            status=status.HTTP_404_NOT_FOUND)
+        try:
+            add_roster_deck(t, p, deck, request.user)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response(RosterSerializer(p.roster, context={"request": request}).data,
+                        status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="remove-roster-deck")
+    def remove_roster_deck(self, request, uuid=None):
+        from .models import RosterDeck
+        from .roster import remove_roster_deck
+        t = self.get_object()
+        p = self._my_participant(t)
+        rd = RosterDeck.objects.filter(uuid=request.data.get("roster_deck"),
+                                       roster__participant=p).first()
+        if not rd:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            remove_roster_deck(rd, request.user)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response(RosterSerializer(p.roster, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="set-ace")
+    def set_ace(self, request, uuid=None):
+        from .models import RosterDeck
+        from .roster import get_or_create_roster, set_ace
+        t = self.get_object()
+        p = self._my_participant(t)
+        roster = get_or_create_roster(t, p)
+        rd = None
+        if request.data.get("roster_deck"):
+            rd = RosterDeck.objects.filter(uuid=request.data["roster_deck"], roster=roster).first()
+            if not rd:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            set_ace(roster, rd, request.user)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response(RosterSerializer(roster, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="confirm-roster")
+    def confirm_roster(self, request, uuid=None):
+        from .roster import confirm_roster, get_or_create_roster
+        t = self.get_object()
+        p = self._my_participant(t)
+        roster = get_or_create_roster(t, p)
+        try:
+            confirm_roster(roster, request.user)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response(RosterSerializer(roster, context={"request": request}).data)
+
+    @action(detail=True, methods=["get"])
+    def rosters(self, request, uuid=None):
+        """All rosters (organizer: power-assignment panel)."""
+        t = self.get_object()
+        self._organizer_guard(t)
+        qs = t.rosters.select_related("participant__user__profile").prefetch_related(
+            "decks__source_deck__cover_printing")
+        return Response(RosterSerializer(qs, many=True, context={"request": request}).data)
+
+    @action(detail=True, methods=["get"], url_path="public-rosters")
+    def public_rosters(self, request, uuid=None):
+        """Rosters as visible to a spectator, honouring roster_visibility
+        (open / partial / closed) — and always full for organizer/self."""
+        from .choices import RosterVisibility, TournamentStatus
+        t = self.get_object()
+        is_org = t.is_organizer(request.user)
+        finished = t.status == TournamentStatus.FINISHED
+        reveal_all = is_org or (finished and t.reveal_lists_after_end)
+        qs = t.rosters.select_related("participant__user__profile").prefetch_related(
+            "decks__source_deck__cover_printing")
+        out = []
+        for r in qs:
+            mine = request.user.is_authenticated and r.participant.user_id == request.user.id
+            show_decks = reveal_all or mine or t.roster_visibility in (
+                RosterVisibility.OPEN, RosterVisibility.PARTIAL)
+            data = RosterSerializer(r, context={"request": request}).data
+            if not show_decks:
+                # Closed: reveal only decks already used in a match.
+                revealed_ids = set(
+                    r.decks.filter(selections__revealed=True).values_list("uuid", flat=True))
+                data["decks"] = [d for d in data["decks"] if d["uuid"] in {str(x) for x in revealed_ids}]
+                data["decks_hidden"] = True
+            out.append(data)
+        return Response(out)
+
+    @action(detail=True, methods=["post"], url_path="set-deck-power")
+    def set_deck_power(self, request, uuid=None):
+        """Organizer assigns/edits a roster deck's power."""
+        from .models import RosterDeck
+        from .roster import set_deck_power
+        t = self.get_object()
+        self._organizer_guard(t)
+        rd = RosterDeck.objects.filter(uuid=request.data.get("roster_deck"),
+                                       roster__tournament=t).select_related("roster").first()
+        if not rd:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        power = request.data.get("power")
+        try:
+            set_deck_power(rd, int(power) if power is not None else None, request.user)
+        except (ValueError, TypeError) as e:
+            raise ValidationError(str(e)) from e
+        return Response(RosterSerializer(rd.roster, context={"request": request}).data)
+
     # --- Bracket + standings ---------------------------------------------
     @action(detail=True, methods=["get"])
     def bracket(self, request, uuid=None):
@@ -224,6 +378,57 @@ class TournamentViewSet(viewsets.ModelViewSet):
         t = self.get_object()
         return Response(StandingSerializer(
             t.standings.select_related("participant__user__profile"), many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="apply-penalty")
+    def apply_penalty(self, request, uuid=None):
+        """Organizer applies a penalty to a participant."""
+        from .services import apply_penalty
+        t = self.get_object()
+        self._organizer_guard(t)
+        p = t.participants.filter(uuid=request.data.get("participant")).first()
+        if not p:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        apply_penalty(p, request.data.get("kind", "warning"), int(request.data.get("points", 0)),
+                      request.data.get("reason", ""), request.user)
+        return Response({"status": "ok"})
+
+    @action(detail=True, methods=["get"])
+    def penalties(self, request, uuid=None):
+        """List penalties (organizer)."""
+        from .models import TournamentPenalty
+        t = self.get_object()
+        self._organizer_guard(t)
+        rows = (TournamentPenalty.objects.filter(participant__tournament=t)
+                .select_related("participant__user"))
+        return Response([{
+            "uuid": str(x.uuid), "participant": x.participant.user.username,
+            "kind": x.kind, "points": x.points, "reason": x.reason,
+            "created_at": x.created_at,
+        } for x in rows])
+
+    @action(detail=True, methods=["get"], url_path="roster-standings")
+    def roster_standings(self, request, uuid=None):
+        """Standings enriched with per-deck win-rate, Ace wins and penalties."""
+        from .roster import roster_standings
+        t = self.get_object()
+        return Response(roster_standings(t))
+
+    @action(detail=True, methods=["get"], url_path="roster-rounds")
+    def roster_rounds(self, request, uuid=None):
+        """Rounds with per-match deck selections (opponent decks gated until reveal)."""
+        from .serializers import RosterMatchSerializer
+        t = self.get_object()
+        ctx = {"request": request, "tournament": t}
+        out = []
+        for stage in t.stages.prefetch_related("rounds__matches__deck_selections"):
+            for rnd in stage.rounds.all():
+                out.append({
+                    "uuid": str(rnd.uuid), "number": rnd.number, "name": rnd.name,
+                    "status": rnd.status,
+                    "matches": RosterMatchSerializer(
+                        rnd.matches.all(), many=True, context=ctx).data,
+                })
+        return Response(out)
 
 
 class MatchViewSet(viewsets.GenericViewSet):
@@ -284,6 +489,55 @@ class MatchViewSet(viewsets.GenericViewSet):
                                  int(request.data.get("score_b", 0)))
         return Response(MatchSerializer(m).data)
 
+    # --- Roster deck selection (per match) -------------------------------
+    def _my_participant_side(self, match, user):
+        for p in (match.participant_a, match.participant_b):
+            if p and p.user_id == user.id:
+                return p
+        return None
+
+    @action(detail=True, methods=["post"], url_path="pick-deck")
+    def pick_deck(self, request, uuid=None):
+        """Manual / choose-from-random: the player selects a deck (secret)."""
+        from .selection import player_pick
+        match = self._match()
+        p = self._my_participant_side(match, request.user)
+        if not p:
+            raise PermissionDenied("Você não joga esta partida.")
+        try:
+            player_pick(match, p, request.data.get("roster_deck"))
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response({"status": "picked"})
+
+    @action(detail=True, methods=["post"], url_path="confirm-selection")
+    def confirm_selection(self, request, uuid=None):
+        """Player confirms readiness; reveal happens once both sides confirm."""
+        from .selection import confirm_selection
+        match = self._match()
+        p = self._my_participant_side(match, request.user)
+        if not p:
+            raise PermissionDenied("Você não joga esta partida.")
+        try:
+            confirm_selection(match, p)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response({"status": "confirmed"})
+
+    @action(detail=True, methods=["post"], url_path="use-ace")
+    def use_ace(self, request, uuid=None):
+        """Player spends their Ace for this match (manual_once / replace_draw)."""
+        from .selection import use_ace
+        match = self._match()
+        p = self._my_participant_side(match, request.user)
+        if not p:
+            raise PermissionDenied("Você não joga esta partida.")
+        try:
+            use_ace(match, p)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        return Response({"status": "ace_used"})
+
     @action(detail=True, methods=["post"])
     def dispute(self, request, uuid=None):
         match = self._match()
@@ -297,3 +551,17 @@ class MatchViewSet(viewsets.GenericViewSet):
         audit(match.round.stage.tournament, "match_disputed", request.user,
               f"Disputa aberta na partida {match.position}")
         return Response(MatchSerializer(match).data)
+
+    @action(detail=True, methods=["post"], url_path="resolve-dispute")
+    def resolve_dispute(self, request, uuid=None):
+        """Organizer resolves a dispute, optionally correcting the score."""
+        from .services import resolve_dispute
+        match = self._match()
+        t = match.round.stage.tournament
+        if not t.is_organizer(request.user):
+            raise PermissionDenied("Apenas o organizador resolve disputas.")
+        sa, sb = request.data.get("score_a"), request.data.get("score_b")
+        resolve_dispute(match, request.user, request.data.get("resolution", ""),
+                        int(sa) if sa is not None else None,
+                        int(sb) if sb is not None else None)
+        return Response(MatchSerializer(self._match()).data)

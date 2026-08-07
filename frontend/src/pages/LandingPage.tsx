@@ -7,7 +7,7 @@ const FEATURES = [
   { icon: Layers, title: "Deck builder", body: "Drag-and-drop acessível, undo/redo, autosave e validação em tempo real." },
   { icon: ListChecks, title: "Coleção", body: "Owned vs. faltando, lista de compras — sem nunca invalidar seu deck." },
   { icon: Shield, title: "Banlists", body: "Oficiais e comunitárias, com Choice Restriction modelada de verdade." },
-  { icon: Sparkles, title: "Power level editorial", body: "Escala 1–10 por formato, definida só por Platform Admins, com auditoria." },
+  { icon: Sparkles, title: "Nível do deck", body: "Você avalia a força do seu deck de 1 a 5 estrelas — usada como orçamento nos torneios de pool." },
   { icon: Swords, title: "Torneios", body: "Inscrições, snapshots imutáveis, brackets interativos e reporte de resultados." },
 ];
 
@@ -42,7 +42,7 @@ export function LandingPage() {
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-[var(--color-ink-muted)]">
           Deck builder de nível profissional, controle de coleção, banlists da comunidade,
-          power level editorial e torneios com brackets — tudo em um só lugar.
+          nível de deck por estrelas e torneios com brackets — tudo em um só lugar.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link to="/register">

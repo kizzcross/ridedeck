@@ -40,7 +40,8 @@ class BanlistViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "objective"]
     ordering_fields = ["updated_at", "like_count"]
 
-    OWNER_ACTIONS = {"update", "partial_update", "destroy", "entry", "group", "publish"}
+    OWNER_ACTIONS = {"update", "partial_update", "destroy", "entry", "group",
+                     "publish", "import_list"}
 
     def get_queryset(self):
         user = self.request.user
@@ -88,6 +89,39 @@ class BanlistViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.soft_delete()
+
+    # --- Import from a text list -----------------------------------------
+    @action(detail=False, methods=["post"], url_path="import-preview",
+            permission_classes=[IsAuthenticatedOrReadOnly])
+    def import_preview(self, request):
+        """Parse a pasted banlist and resolve each line to a card + restriction
+        (fuzzy, tolerant of typos). Read-only."""
+        from apps.cards.serializers import CardListSerializer
+
+        from .importer import parse_banlist
+        resolved = parse_banlist(request.data.get("text", ""))
+        return Response({"entries": [
+            {
+                "raw": r.raw, "input_name": r.input_name,
+                "restriction_type": r.restriction_type, "limit_value": r.limit_value,
+                "confidence": r.confidence, "score": r.score,
+                "card": CardListSerializer(r.card).data if r.card else None,
+                "suggestions": [CardListSerializer(c).data for c in r.suggestions],
+            }
+            for r in resolved
+        ]})
+
+    @action(detail=True, methods=["post"], url_path="import-list")
+    def import_list(self, request, uuid=None):
+        """Apply resolved banlist entries. Body: {entries:[{card, restriction_type,
+        limit_value?}], replace}."""
+        from .services import import_entries
+        banlist = self.get_object()
+        version = import_entries(banlist, request.data.get("entries", []),
+                                 replace=bool(request.data.get("replace", False)))
+        banlist.save(update_fields=["updated_at"])
+        version.refresh_from_db()
+        return Response(BanlistVersionSerializer(version).data)
 
     # --- Editing ----------------------------------------------------------
     @extend_schema(request=EntryWriteSerializer, responses=BanlistVersionSerializer)

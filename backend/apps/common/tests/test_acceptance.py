@@ -19,7 +19,6 @@ from apps.banlists.services import banlist_violations
 from apps.cards.models import Card, CardPrinting, CardSet
 from apps.decks.models import Deck
 from apps.decks.services import ensure_working_version, set_entry
-from apps.powerlevel.models import CardPowerLevel
 from apps.tournaments.choices import MatchState, TournamentStatus
 from apps.tournaments.models import Tournament, TournamentParticipant
 from apps.tournaments.services import (
@@ -60,29 +59,34 @@ def cards(db):
     return made
 
 
-# 1
-def test_01_member_cannot_edit_power_level(member, cards):
-    r = api_for(member).post(reverse("v1:admin-power-set"),
-                             {"card": str(cards[0].uuid), "format_code": "standard",
-                              "value": 8, "justification": "x"}, format="json")
-    assert r.status_code == 403
+# 1 — deck owner sets a 1–5 star rating (replaces editorial per-card power level)
+def test_01_member_sets_deck_power_stars(member, cards, formats):
+    deck = Deck.objects.create(owner=member, title="D", format_code="standard")
+    r = api_for(member).patch(reverse("v1:deck-detail", args=[deck.uuid]),
+                              {"power_stars": 4}, format="json")
+    assert r.status_code == 200
+    deck.refresh_from_db()
+    assert deck.power_stars == 4
 
 
-# 2
-def test_02_organizer_cannot_edit_power_level(organizer, cards):
-    r = api_for(organizer).post(reverse("v1:admin-power-set"),
-                                {"card": str(cards[0].uuid), "format_code": "standard",
-                                 "value": 8, "justification": "x"}, format="json")
-    assert r.status_code == 403
+# 2 — a non-owner cannot change another user's deck stars
+def test_02_non_owner_cannot_set_deck_power_stars(member, organizer, cards, formats):
+    deck = Deck.objects.create(owner=member, title="D", format_code="standard")
+    r = api_for(organizer).patch(reverse("v1:deck-detail", args=[deck.uuid]),
+                                 {"power_stars": 5}, format="json")
+    assert r.status_code in (403, 404)
+    deck.refresh_from_db()
+    assert deck.power_stars is None
 
 
-# 3
-def test_03_admin_edits_power_level_with_justification(platform_admin, cards):
-    r = api_for(platform_admin).post(reverse("v1:admin-power-set"),
-                                     {"card": str(cards[0].uuid), "format_code": "standard",
-                                      "value": 8, "justification": "meta call"}, format="json")
-    assert r.status_code == 201
-    assert CardPowerLevel.objects.get(card=cards[0], format_code="standard").value == 8
+# 3 — stars are constrained to the 1–5 range
+def test_03_deck_power_stars_out_of_range_rejected(member, cards, formats):
+    deck = Deck.objects.create(owner=member, title="D", format_code="standard")
+    r = api_for(member).patch(reverse("v1:deck-detail", args=[deck.uuid]),
+                              {"power_stars": 9}, format="json")
+    assert r.status_code == 400
+    deck.refresh_from_db()
+    assert deck.power_stars is None
 
 
 # 4

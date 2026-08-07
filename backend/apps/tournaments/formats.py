@@ -376,6 +376,8 @@ def generate_double_elimination(tournament, actor) -> TournamentStage:
 
 
 def dispatch_generate(tournament, actor):
+    if tournament.is_roster:
+        return _dispatch_roster(tournament, actor)
     bt = tournament.bracket_type
     if bt == BracketType.SINGLE_ELIMINATION:
         from .services import generate_single_elimination
@@ -389,6 +391,37 @@ def dispatch_generate(tournament, actor):
     if bt == BracketType.DOUBLE_ELIMINATION:
         return generate_double_elimination(tournament, actor)
     raise ValueError(f"Formato não suportado: {bt}")
+
+
+def _dispatch_roster(tournament, actor):
+    """Roster championships pick the pairing engine from `format_kind`:
+    points (Swiss/Round Robin), bracket (single/double elim) or hybrid
+    (Swiss → Top Cut). Seeds are set from `seed_source` first."""
+    from .choices import FormatKind
+    from .services import apply_seed_source, generate_single_elimination
+
+    apply_seed_source(tournament)
+    fk = tournament.format_kind
+
+    if fk == FormatKind.POINTS:
+        if tournament.bracket_type == BracketType.ROUND_ROBIN:
+            return generate_round_robin(tournament, actor)
+        return generate_swiss(tournament, actor, num_rounds=tournament.rounds_count)
+
+    if fk == FormatKind.BRACKET:
+        if tournament.bracket_type == BracketType.DOUBLE_ELIMINATION:
+            return generate_double_elimination(tournament, actor)
+        return generate_single_elimination(tournament, actor)
+
+    if fk == FormatKind.HYBRID:
+        cfg = dict(tournament.custom_rules or {})
+        cfg["top_cut_size"] = tournament.hybrid_advance_count or 8
+        tournament.custom_rules = cfg
+        tournament.save(update_fields=["custom_rules"])
+        return generate_swiss(tournament, actor, num_rounds=tournament.rounds_count,
+                              kind=BracketType.SWISS_TOP_CUT)
+
+    raise ValueError(f"Formato de campeonato não suportado: {fk}")
 
 
 def all_pairings(participants):

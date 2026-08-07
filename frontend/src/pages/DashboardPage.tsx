@@ -48,7 +48,7 @@ export function DashboardPage() {
             <h3 className="font-display text-lg font-semibold">Ferramentas administrativas</h3>
           </div>
           <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-            Editor de power level, banlists oficiais, sincronização de catálogo e auditoria — habilitados nas Fases 2 e 5.
+            Banlists oficiais, sincronização de catálogo e auditoria — habilitados nas Fases 2 e 5.
           </p>
         </Panel>
       )}

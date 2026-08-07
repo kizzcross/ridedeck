@@ -14,7 +14,6 @@ from apps.formats.models import (
     FormatZoneRule,
     GameFormat,
 )
-from apps.powerlevel.services import default_scale
 
 FORMATS = [
     {
@@ -42,7 +41,6 @@ class Command(BaseCommand):
     help = "Seed game formats and their rule versions."
 
     def handle(self, *args, **opts):
-        default_scale()  # ensure the 1-10 scale exists
         for spec in FORMATS:
             fmt, _ = GameFormat.objects.get_or_create(
                 code=spec["code"],

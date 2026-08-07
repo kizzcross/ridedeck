@@ -89,3 +89,24 @@ class CardDetailSerializer(serializers.ModelSerializer):
                   "clan", "race", "is_persona_ride", "keywords", "rules_data",
                   "equivalence_strategy", "default_printing", "printings",
                   "format_legalities", "external_ids"]
+
+
+def serialize_resolved_lines(resolved) -> list[dict]:
+    """Serialize importer.ResolvedLine[] into a preview payload (reuses the
+    compact CardListSerializer for the matched card + suggestions)."""
+    def card(c):
+        return CardListSerializer(c).data if c else None
+
+    return [
+        {
+            "raw": r.raw,
+            "input_name": r.input_name,
+            "quantity": r.quantity,
+            "zone": r.zone,
+            "confidence": r.confidence,
+            "score": r.score,
+            "card": card(r.card),
+            "suggestions": [card(c) for c in r.suggestions],
+        }
+        for r in resolved
+    ]

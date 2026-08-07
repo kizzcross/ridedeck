@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, GitFork, Layers, ShieldCheck, Trash2 } from "lucide-react";
+import { Ban, GitFork, Layers, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { banlistsApi } from "@/api/banlists";
+import { ImportListModal } from "@/features/import/ImportListModal";
 import { cardsApi, type CardListItem } from "@/api/cards";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -58,6 +59,7 @@ export function BanlistDetailPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [restriction, setRestriction] = useState("banned");
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: bl, isLoading } = useQuery({ queryKey: ["banlist", uuid], queryFn: () => banlistsApi.detail(uuid) });
   const refresh = () => qc.invalidateQueries({ queryKey: ["banlist", uuid] });
@@ -113,7 +115,12 @@ export function BanlistDetailPage() {
       {/* Owner editor */}
       {bl.is_owner && (
         <Panel className="space-y-3 p-4">
-          <h3 className="font-display text-sm uppercase text-[var(--color-ink-muted)]">Adicionar restrição</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-display text-sm uppercase text-[var(--color-ink-muted)]">Adicionar restrição</h3>
+            <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)} title="Importar banlist por lista de texto">
+              <Upload className="h-4 w-4" /> Importar lista
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-1">
             {RESTRICTIONS.map((r) => (
               <button
@@ -191,6 +198,14 @@ export function BanlistDetailPage() {
           </div>
         </Panel>
       )}
+
+      <ImportListModal
+        open={importOpen}
+        kind="banlist"
+        targetUuid={uuid}
+        onClose={() => setImportOpen(false)}
+        onApplied={refresh}
+      />
     </div>
   );
 }

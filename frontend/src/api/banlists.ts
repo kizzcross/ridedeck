@@ -63,7 +63,28 @@ export interface BanlistDetail extends BanlistListItem {
   is_owner: boolean;
 }
 
+import type { ImportCard, ImportConfidence } from "./decks";
+
+export interface ImportBanEntry {
+  raw: string;
+  input_name: string;
+  restriction_type: string;
+  limit_value: number | null;
+  confidence: ImportConfidence;
+  score: number;
+  card: ImportCard | null;
+  suggestions: ImportCard[];
+}
+
 export const banlistsApi = {
+  async importPreview(text: string) {
+    const { data } = await api.post<{ entries: ImportBanEntry[] }>("/banlists/import-preview/", { text });
+    return data.entries;
+  },
+  async importApply(uuid: string, entries: { card: string; restriction_type: string; limit_value: number | null }[], replace: boolean) {
+    const { data } = await api.post<BanlistVersion>(`/banlists/${uuid}/import-list/`, { entries, replace });
+    return data;
+  },
   async list(params: Record<string, string | number | undefined> = {}) {
     const { data } = await api.get<Paginated<BanlistListItem>>("/banlists/", {
       params: { page_size: 40, ...params },

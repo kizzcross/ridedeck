@@ -38,6 +38,7 @@ export interface DeckListItem {
   archetype: string;
   like_count: number;
   favorite_count: number;
+  power_stars: number | null;
   cover_image: string | null;
   main_count: number;
   updated_at: string;
@@ -61,6 +62,7 @@ export interface DeckDetail {
   changelog: string;
   like_count: number;
   favorite_count: number;
+  power_stars: number | null;
   forked_from: number | null;
   current_version: DeckVersion;
   is_owner: boolean;
@@ -76,7 +78,33 @@ export interface ValidationResult {
   summary: Record<string, number>;
 }
 
+export interface ImportCard {
+  uuid: string;
+  name: string;
+  grade: number;
+  default_printing?: { image_url?: string | null } | null;
+}
+export type ImportConfidence = "exact" | "code" | "fuzzy" | "ambiguous" | "unmatched";
+export interface ImportLine {
+  raw: string;
+  input_name: string;
+  quantity: number;
+  zone: Zone;
+  confidence: ImportConfidence;
+  score: number;
+  card: ImportCard | null;
+  suggestions: ImportCard[];
+}
+
 export const decksApi = {
+  async importPreview(text: string, default_zone: Zone = "main_deck") {
+    const { data } = await api.post<{ lines: ImportLine[] }>("/decks/import-preview/", { text, default_zone });
+    return data.lines;
+  },
+  async importApply(uuid: string, lines: { card: string; zone: Zone; quantity: number }[], replace: boolean) {
+    const { data } = await api.post<DeckVersion>(`/decks/${uuid}/import-list/`, { lines, replace });
+    return data;
+  },
   async myDecks() {
     const { data } = await api.get<Paginated<DeckListItem>>("/decks/", { params: { mine: 1, page_size: 60 } });
     return data;

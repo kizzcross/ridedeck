@@ -16,11 +16,15 @@ integração passa pelo backend.
 | `imports`    | Adapters de dados (TCGCSV/TCGplayer), batches idempotentes, payload bruto, métricas | 2 |
 | `collection` | Coleção pessoal, wishlist, itens de troca | 4 |
 | `formats`    | Formatos e **versões de regras** (zonas, triggers, construção, exceções) — no banco | 5 |
-| `powerlevel` | Escala, power level por identidade/formato, histórico, políticas de torneio | 5 |
 | `banlists`   | Banlist/versões/entradas, restriction groups, choice restriction, condições | 6 |
-| `decks`      | Deck, DeckVersion, DeckEntry, likes/favoritos/comentários, forks, snapshots | 3 |
+| `decks`      | Deck (inclui `power_stars` 1–5), DeckVersion, DeckEntry, likes/favoritos/comentários, forks, snapshots | 3 |
 | `validation` | **Rule engine** central — fonte de verdade da validação de decks | 3+ |
-| `tournaments`| Torneios, inscrições, submissão+snapshot, stages/rounds/matches, brackets, auditoria | 7-8 |
+| `tournaments`| Torneios clássicos (brackets) **+ modo campeonato por roster** (time de decks, cap de força, sorteio, Ace) — inscrições, snapshots, stages/rounds/matches, standings, auditoria | 7-8 |
+
+> **Removido (v2.0):** o app `powerlevel` (rating editorial 1–10 por carta/formato).
+> "Força" agora é `Deck.power_stars` (dono do deck) e, em campeonatos, uma nota por
+> deck atribuída pelo dono do torneio. `Card.power` (poder de batalha) é outra coisa
+> e permanece.
 
 ### Princípios
 
@@ -28,15 +32,15 @@ integração passa pelo backend.
    enviada pelo cliente. `apps/common/permissions.py` define `IsPlatformAdmin`,
    `IsOwnerOrReadOnly`, etc. Papéis: `PlatformRole` (global) e Tournament
    Organizer (por-objeto, escopo de um torneio).
-2. **Identidade canônica ≠ printing.** Limite de cópias, banlist e power level
-   operam sobre a identidade da carta (`Card`), não sobre uma impressão isolada.
-3. **Regras versionadas no banco.** Formatos, banlists e power levels têm versões
-   com validade temporal — novas regras não exigem migration de código.
-4. **Snapshots imutáveis.** Ao submeter um deck a um torneio, congela-se a lista
-   (com hash), as regras, a banlist e a política de power level. Mudanças futuras
-   nessas fontes globais não alteram torneios já iniciados.
-5. **Auditoria.** Alterações sensíveis geram registros (audit log genérico +
-   tabelas de histórico específicas, ex.: power level).
+2. **Identidade canônica ≠ printing.** Limite de cópias e banlist operam sobre a
+   identidade da carta (`Card`), não sobre uma impressão isolada.
+3. **Regras versionadas no banco.** Formatos e banlists têm versões com validade
+   temporal — novas regras não exigem migration de código.
+4. **Snapshots imutáveis.** Ao submeter um deck a um torneio (ou travar um roster),
+   congela-se a lista (com hash), as regras e a banlist. Mudanças futuras nessas
+   fontes globais não alteram torneios já iniciados.
+5. **Auditoria.** Alterações sensíveis geram registros (audit log genérico + logs
+   específicos, ex.: `DeckDrawLog` de sorteios, `AceEvent`, `TournamentPenalty`).
 
 ## Frontend (`frontend/src/`)
 
@@ -44,7 +48,8 @@ integração passa pelo backend.
 |---------------|----------|
 | `app/`        | Router, providers (Query, Theme, Toast), ProtectedRoute, AppShell |
 | `pages/`      | Páginas de rota |
-| `features/`   | Módulos de domínio (deck builder, catálogo…) — crescem por fase |
+| `features/`   | Módulos de domínio (deck builder, catálogo, **championship**: DeckCard/CapMeter/AceCeremony/VersusBoard/DrawAnimator…) |
+| `app/MotionProvider` | Política de motion central (`framer-motion` + `prefers-reduced-motion` + toggle) |
 | `components/ui/` | Design system (Button, Input, Panel, Badge, Toast, Skeleton) |
 | `lib/`        | Cliente axios com refresh transparente, tokens, `cn()` |
 | `api/`        | Funções tipadas por domínio + tipos |
