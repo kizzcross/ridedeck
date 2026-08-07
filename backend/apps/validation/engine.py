@@ -31,8 +31,6 @@ class ValidationContext:
     lines: list[DeckLine]
     format_code: str
     rule_version: object | None          # formats.FormatRuleVersion
-    power_map: dict[str, int] = field(default_factory=dict)
-    power_policy: object | None = None   # powerlevel.TournamentPowerPolicy
     banlist_version: object | None = None  # banlists.BanlistVersion
     owned_map: dict[str, int] = field(default_factory=dict)
     reference_date: date | None = None
@@ -156,47 +154,6 @@ class NationLockRule(Rule):
         return []
 
 
-class PowerPolicyRule(Rule):
-    code = "POWER_POLICY"
-
-    def check(self, ctx):
-        policy = ctx.power_policy
-        if not policy:
-            return []
-        cfg = policy.config or {}
-        pm = ctx.power_map
-        out = []
-        rated = [(ln, pm.get(ln.card_uuid)) for ln in ctx.lines]
-        rated = [(ln, v) for ln, v in rated if v is not None]
-
-        if policy.kind == "max_per_card":
-            cap = cfg.get("max", 10)
-            for ln, v in rated:
-                if v > cap:
-                    out.append(self.error("POWER_MAX_PER_CARD",
-                        f"“{ln.name}” é power {v}, acima do máximo {cap}.", card_id=ln.card_uuid))
-        elif policy.kind == "range":
-            lo, hi = cfg.get("min", 1), cfg.get("max", 10)
-            for ln, v in rated:
-                if v < lo or v > hi:
-                    out.append(self.error("POWER_RANGE",
-                        f"“{ln.name}” (power {v}) fora da faixa {lo}-{hi}.", card_id=ln.card_uuid))
-        elif policy.kind == "max_above":
-            thr, cap = cfg.get("threshold", 7), cfg.get("max_cards", 4)
-            n = sum(ln.quantity for ln, v in rated if v >= thr)
-            if n > cap:
-                out.append(self.error("POWER_MAX_ABOVE",
-                    f"Máximo de {cap} cartas nível ≥{thr} (atual: {n})."))
-        elif policy.kind == "point_budget":
-            budget = cfg.get("budget", 0)
-            total = sum(v * ln.quantity for ln, v in rated
-                        if cfg.get("zone", "main_deck") in (ln.zone, "any"))
-            if total > budget:
-                out.append(self.error("POWER_BUDGET",
-                    f"Orçamento de {budget} power points excedido (atual: {total})."))
-        return out
-
-
 class BanlistRule(Rule):
     """Enforce the selected banlist version (banned, limits, choice restriction,
     group limits, conditional rules)."""
@@ -242,7 +199,7 @@ class CollectionWarningRule(Rule):
 
 DEFAULT_RULES: list[Rule] = [
     ZoneCountRule(), CopyLimitRule(), TriggerRule(), NationLockRule(),
-    BanlistRule(), PowerPolicyRule(), CollectionWarningRule(),
+    BanlistRule(), CollectionWarningRule(),
 ]
 
 
@@ -255,12 +212,6 @@ def run_engine(ctx: ValidationContext, rules: list[Rule] | None = None) -> dict:
                 {k: v for k, v in issue.items() if k != "severity"}
             )
 
-    pm = ctx.power_map
-    powered = [(ln, pm.get(ln.card_uuid)) for ln in ctx.lines]
-    powered = [(ln, v) for ln, v in powered if v is not None]
-    max_power = max((v for _, v in powered), default=None)
-    power_point_total = sum(v * ln.quantity for ln, v in powered)
-
     return {
         "is_valid": len(errors) == 0,
         "errors": errors,
@@ -270,8 +221,6 @@ def run_engine(ctx: ValidationContext, rules: list[Rule] | None = None) -> dict:
             "ride_deck_count": ctx.zone_count("ride_deck"),
             "g_deck_count": ctx.zone_count("g_deck"),
             "trigger_count": ctx.trigger_count(),
-            "maximum_power_level": max_power,
-            "power_point_total": power_point_total,
         },
         "reference_date": (ctx.reference_date or timezone.now().date()).isoformat(),
     }

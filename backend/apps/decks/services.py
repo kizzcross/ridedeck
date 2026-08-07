@@ -68,6 +68,30 @@ def set_entry(version: DeckVersion, card: Card, zone: str, quantity: int,
 
 
 @transaction.atomic
+def import_entries(deck: Deck, lines: list[dict], *, replace: bool = False) -> DeckVersion:
+    """Apply resolved import lines to the deck's working version. Each line is
+    {card: Card|uuid, zone, quantity}. `replace` clears the version first;
+    otherwise quantities are ADDED to whatever is already there."""
+    version = ensure_working_version(deck)
+    if replace:
+        version.entries.all().delete()
+    for ln in lines:
+        card = ln["card"]
+        if not isinstance(card, Card):
+            card = Card.objects.filter(uuid=card).first()
+        if not card:
+            continue
+        zone = ln.get("zone") or Zone.MAIN_DECK
+        qty = int(ln.get("quantity", 1))
+        existing = 0 if replace else (
+            DeckEntry.objects.filter(version=version, card=card, zone=zone)
+            .values_list("quantity", flat=True).first() or 0
+        )
+        set_entry(version, card, zone, min(99, existing + qty))
+    return version
+
+
+@transaction.atomic
 def fork_deck(deck: Deck, user) -> Deck:
     source_version = ensure_working_version(deck)
     new_deck = Deck.objects.create(

@@ -44,7 +44,7 @@ class DeckListSerializer(serializers.ModelSerializer):
         model = Deck
         fields = ["uuid", "title", "format_code", "visibility", "owner", "nation_focus",
                   "clan_focus", "archetype", "like_count", "favorite_count",
-                  "cover_image", "main_count", "updated_at"]
+                  "power_stars", "cover_image", "main_count", "updated_at"]
 
     def get_cover_image(self, obj) -> str | None:
         return obj.cover_printing.image_url if obj.cover_printing else None
@@ -66,7 +66,7 @@ class DeckDetailSerializer(serializers.ModelSerializer):
         fields = ["uuid", "title", "description", "format_code", "visibility", "owner",
                   "nation_focus", "clan_focus", "archetype", "tags", "guide", "combos",
                   "matchups", "side_notes", "changelog", "like_count", "favorite_count",
-                  "forked_from", "check_banlist_uuid", "check_banlist_name",
+                  "power_stars", "forked_from", "check_banlist_uuid", "check_banlist_name",
                   "current_version", "is_owner", "created_at", "updated_at"]
         read_only_fields = ["like_count", "favorite_count", "forked_from"]
 
@@ -91,7 +91,7 @@ class DeckWriteSerializer(serializers.ModelSerializer):
         model = Deck
         fields = ["title", "description", "format_code", "visibility", "nation_focus",
                   "clan_focus", "archetype", "guide", "combos", "matchups", "side_notes",
-                  "changelog", "check_banlist_uuid"]
+                  "changelog", "power_stars", "check_banlist_uuid"]
 
     def update(self, instance, validated_data):
         if "check_banlist_uuid" in validated_data:

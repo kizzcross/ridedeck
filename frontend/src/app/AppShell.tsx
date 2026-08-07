@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
@@ -12,8 +13,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "./theme";
-import { Badge, Button } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
+import { ReduceMotionToggle } from "@/features/championship/ReduceMotionToggle";
 import { cn } from "@/lib/cn";
 
 const NAV = [
@@ -69,11 +71,7 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {user?.is_platform_admin && (
-              <NavLink to="/admin/power-levels">
-                <Badge tone="official">Admin</Badge>
-              </NavLink>
-            )}
+            <ReduceMotionToggle className="hidden sm:grid" />
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Alternar tema">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
@@ -102,7 +100,9 @@ export function AppShell() {
       </header>
 
       <main id="main-content" className="mx-auto max-w-7xl px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
-        <Outlet />
+        <Suspense fallback={<div className="rd-fade-in h-[60vh] w-full animate-pulse rounded-[var(--radius-card)] bg-[var(--color-surface-2)]" />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Mobile bottom nav */}

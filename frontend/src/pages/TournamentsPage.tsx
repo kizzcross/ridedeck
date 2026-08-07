@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Swords, Users, Wifi, MapPin } from "lucide-react";
+import { Crown, Plus, Swords, Users, Wifi, MapPin } from "lucide-react";
 import { tournamentsApi, type TournamentListItem } from "@/api/tournaments";
 import { Avatar } from "@/components/Avatar";
 import { Badge, Button, Panel, Skeleton, useToast } from "@/components/ui";
@@ -31,11 +31,14 @@ function TournamentCard({ t }: { t: TournamentListItem }) {
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           <Badge tone={STATUS_TONE[t.status]} className="absolute right-2 top-2">{STATUS_LABEL[t.status]}</Badge>
+          {t.kind === "roster" && (
+            <Badge tone="accent" className="absolute left-2 top-2"><Crown className="h-3 w-3" /> Campeonato</Badge>
+          )}
         </div>
         <div className="p-3">
           <h3 className="font-display line-clamp-1 text-sm">{t.name}</h3>
           <p className="font-display mt-0.5 text-[10px] uppercase text-[var(--color-ink-subtle)]">
-            {t.format_code} · {t.bracket_type.replace(/_/g, " ")}
+            {t.kind === "roster" ? `${t.format_code} · time de decks` : `${t.format_code} · ${t.bracket_type.replace(/_/g, " ")}`}
           </p>
           <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--color-ink-muted)]">
             <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {t.participant_count}/{t.max_participants}</span>
@@ -71,7 +74,10 @@ export function TournamentsPage() {
           <Swords className="h-6 w-6 text-[var(--color-accent)]" />
           <span className="text-gradient">Torneios</span>
         </h1>
-        <Button onClick={() => setCreating((s) => !s)}><Plus className="h-4 w-4" /> Criar torneio</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setCreating((s) => !s)}><Plus className="h-4 w-4" /> Torneio rápido</Button>
+          <Button onClick={() => navigate("/app/tournaments/new")}><Crown className="h-4 w-4" /> Novo campeonato</Button>
+        </div>
       </div>
 
       {creating && (
@@ -95,6 +101,9 @@ export function TournamentsPage() {
             </select>
           </label>
           <Button loading={create.isPending} onClick={() => create.mutate()}>Criar e configurar</Button>
+          <p className="w-full text-xs text-[var(--color-ink-subtle)]">
+            Para o modo <strong>campeonato de decks</strong> (roster, cap de força, sorteio, Ace), use o botão <strong>Novo campeonato</strong>.
+          </p>
         </Panel>
       )}
 

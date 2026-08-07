@@ -8,13 +8,12 @@ Código: [`apps/validation/engine.py`](../backend/apps/validation/engine.py) +
 
 ## Entrada
 
-`validate_deck_version(version, *, owned_map, power_policy, banlist_version, reference_date)`
+`validate_deck_version(version, *, owned_map, banlist_version, reference_date)`
 monta um `ValidationContext` com:
 
 - **Deck** (linhas: card, zona, quantidade, grade, trigger, nation, tipo).
 - **Formato + versão** — `FormatRuleVersion` vigente na `reference_date` (regras no banco).
 - **Banlist + versão** — opcional (`?banlist=` no endpoint, ou snapshot do torneio).
-- **Política de power level** — opcional (torneio).
 - **Data de referência** — para regras/versões temporais.
 - **owned_map** — para o aviso de coleção (nunca erro).
 
@@ -30,8 +29,11 @@ Cada regra é uma subclasse de `Rule` com `check(ctx) -> list[issue]`. A lista
 | `TriggerRule` | erro/aviso | Total de triggers, limite de Over Trigger, limites por tipo. |
 | `NationLockRule` | erro | Nation única quando o formato trava. |
 | `BanlistRule` | erro | Delega para `apps.banlists.services.banlist_violations` (banido, LIMIT_TO_N, First Vanguard, Choice Restriction, grupos, condicionais). |
-| `PowerPolicyRule` | erro | Política do torneio sobre os power levels existentes (máx por carta, faixa, máx acima de N, orçamento). |
 | `CollectionWarningRule` | **aviso** | Cópias faltantes na coleção — **jamais** invalida o deck. |
+
+> **Removido (v2.0):** a `PowerPolicyRule` (política de power level por carta). O
+> controle de força de decks agora é o **cap de campeonato** (soma das notas por
+> deck ≤ `power_cap`), validado em `apps.tournaments.roster`, não no rule engine.
 
 ## Saída (formato estável)
 
@@ -41,8 +43,8 @@ Cada regra é uma subclasse de `Rule` com `check(ctx) -> list[issue]`. A lista
   "errors": [{"code": "BANNED_CARD", "card_id": "...", "message": "...", "zone": "...",
               "current_quantity": 1, "allowed_quantity": 0}],
   "warnings": [{"code": "MISSING_OWNED_COPIES", "card_id": "...", "missing_quantity": 3}],
-  "summary": {"main_deck_count": 50, "ride_deck_count": 5, "trigger_count": 16,
-              "maximum_power_level": 7, "power_point_total": 166},
+  "summary": {"main_deck_count": 50, "ride_deck_count": 5, "g_deck_count": 0,
+              "trigger_count": 16},
   "format_rules_version": 1, "banlist_version": 2, "reference_date": "2026-08-04"
 }
 ```
@@ -63,10 +65,13 @@ Cada regra é uma subclasse de `Rule` com `check(ctx) -> list[issue]`. A lista
 3. Regras de formato/banlist novas entram **no banco** (nova `FormatRuleVersion` /
    `BanlistVersion`) — sem migration de código.
 
-## Nota sobre power level e IA
+## Nota sobre "força" do deck
 
-O cálculo de força do deck (`apps.powerlevel.services.deck_power_stats`) é uma
-**estimativa**. O único dado editorial oficial é o power level individual das
-cartas, definido por Platform Admins. Nenhuma IA altera power levels; sugestões
-de IA (futuro) seriam drafts privados para revisão administrativa — nunca
-publicadas automaticamente.
+Não há mais rating editorial de cartas. A força de um deck é:
+
+- **`Deck.power_stars`** (1–5) — escolhido pelo **dono do deck** no builder; sugestão
+  livre, sem validação de regra.
+- **Nota por deck no campeonato** — atribuída pelo **dono do torneio**; a soma do
+  time deve caber no `power_cap` (validado em `apps.tournaments.roster`).
+
+Nenhuma IA define força automaticamente.

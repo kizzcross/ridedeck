@@ -13,7 +13,6 @@ api_v1 = [
     path("", include("apps.cards.urls")),
     path("", include("apps.collection.urls")),
     path("", include("apps.formats.urls")),
-    path("", include("apps.powerlevel.urls")),
     path("", include("apps.banlists.urls")),
     path("", include("apps.decks.urls")),
     path("", include("apps.collection.urls")),

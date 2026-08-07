@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
         self.seed_users()
         self.seed_catalog()
-        self.seed_formats_and_power()
+        self.seed_formats()
         self.seed_banlists()
         self.stdout.write(self.style.SUCCESS("Seed complete."))
 
@@ -89,27 +89,10 @@ class Command(BaseCommand):
                                     restriction_type=RestrictionType.CHOICE_RESTRICTION, group=grp)
         self.stdout.write("  + Banlists: 1 oficial + 2 comunitárias (com Choice Restriction)")
 
-    def seed_formats_and_power(self):
+    def seed_formats(self):
         from django.core.management import call_command
 
-        from apps.cards.models import Card
-        from apps.powerlevel.models import CardPowerLevel
-        from apps.powerlevel.services import set_power_level
-
         call_command("seed_formats")
-
-        admin = User.objects.filter(role="platform_admin").first()
-        if admin and not CardPowerLevel.objects.exists():
-            # Give a handful of cards sample power levels so the deck power view
-            # and admin editor have data to show.
-            sample = list(Card.objects.order_by("-grade", "name")[:12])
-            for i, card in enumerate(sample):
-                set_power_level(
-                    admin=admin, card=card, format_code="standard",
-                    value=min(10, 4 + (i % 7)),
-                    justification="Seed inicial (dev).",
-                )
-            self.stdout.write(f"  + Power levels: {len(sample)} cartas avaliadas (Standard)")
 
     def seed_catalog(self):
         """Import the offline fixture catalog (3 sets, 30 fictional cards)."""

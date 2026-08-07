@@ -1,32 +1,42 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "./AppShell";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { LandingPage } from "@/pages/LandingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { CatalogPage } from "@/pages/CatalogPage";
-import { MyDecksPage } from "@/pages/MyDecksPage";
-import { DeckBuilderPage } from "@/pages/DeckBuilderPage";
-import { DeckViewPage } from "@/pages/DeckViewPage";
-import { PublicDeckPage } from "@/pages/PublicDeckPage";
-import { PublicBanlistPage } from "@/pages/PublicBanlistPage";
-import { CollectionPage } from "@/pages/CollectionPage";
-import { BanlistsPage } from "@/pages/BanlistsPage";
-import { BanlistDetailPage } from "@/pages/BanlistDetailPage";
-import { TournamentsPage } from "@/pages/TournamentsPage";
-import { TournamentDetailPage } from "@/pages/TournamentDetailPage";
-import { PowerLevelAdminPage } from "@/pages/admin/PowerLevelAdminPage";
-import { ProfilePage } from "@/pages/ProfilePage";
-import { PublicProfilePage } from "@/pages/PublicProfilePage";
+// Heavy routes are code-split so the main bundle stays lean (framer-motion,
+// dnd-kit and the championship UI load only when their page is visited).
+const named = <T extends string>(p: Promise<Record<T, React.ComponentType>>, k: T) =>
+  p.then((m) => ({ default: m[k] }));
+const CatalogPage = lazy(() => named(import("@/pages/CatalogPage"), "CatalogPage"));
+const MyDecksPage = lazy(() => named(import("@/pages/MyDecksPage"), "MyDecksPage"));
+const DeckBuilderPage = lazy(() => named(import("@/pages/DeckBuilderPage"), "DeckBuilderPage"));
+const DeckViewPage = lazy(() => named(import("@/pages/DeckViewPage"), "DeckViewPage"));
+const PublicDeckPage = lazy(() => named(import("@/pages/PublicDeckPage"), "PublicDeckPage"));
+const PublicBanlistPage = lazy(() => named(import("@/pages/PublicBanlistPage"), "PublicBanlistPage"));
+const CollectionPage = lazy(() => named(import("@/pages/CollectionPage"), "CollectionPage"));
+const BanlistsPage = lazy(() => named(import("@/pages/BanlistsPage"), "BanlistsPage"));
+const BanlistDetailPage = lazy(() => named(import("@/pages/BanlistDetailPage"), "BanlistDetailPage"));
+const TournamentsPage = lazy(() => named(import("@/pages/TournamentsPage"), "TournamentsPage"));
+const TournamentCreateWizardPage = lazy(() => named(import("@/pages/TournamentCreateWizardPage"), "TournamentCreateWizardPage"));
+const TournamentDetailPage = lazy(() => named(import("@/pages/TournamentDetailPage"), "TournamentDetailPage"));
+const RosterBuilderPage = lazy(() => named(import("@/pages/RosterBuilderPage"), "RosterBuilderPage"));
+const RoundBoardPage = lazy(() => named(import("@/pages/RoundBoardPage"), "RoundBoardPage"));
+const OwnerControlPanelPage = lazy(() => named(import("@/pages/OwnerControlPanelPage"), "OwnerControlPanelPage"));
+const OverlayPage = lazy(() => named(import("@/pages/OverlayPage"), "OverlayPage"));
+const ProfilePage = lazy(() => named(import("@/pages/ProfilePage"), "ProfilePage"));
+const PublicProfilePage = lazy(() => named(import("@/pages/PublicProfilePage"), "PublicProfilePage"));
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
-  { path: "/d/:uuid", element: <PublicDeckPage /> },
-  { path: "/b/:uuid", element: <PublicBanlistPage /> },
+  { path: "/overlay/:uuid", element: <Suspense fallback={null}><OverlayPage /></Suspense> },
+  { path: "/d/:uuid", element: <Suspense fallback={null}><PublicDeckPage /></Suspense> },
+  { path: "/b/:uuid", element: <Suspense fallback={null}><PublicBanlistPage /></Suspense> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -45,20 +55,11 @@ export const router = createBrowserRouter([
           { path: "banlists", element: <BanlistsPage /> },
           { path: "banlists/:uuid", element: <BanlistDetailPage /> },
           { path: "tournaments", element: <TournamentsPage /> },
+          { path: "tournaments/new", element: <TournamentCreateWizardPage /> },
           { path: "tournaments/:uuid", element: <TournamentDetailPage /> },
-        ],
-      },
-    ],
-  },
-  {
-    element: <ProtectedRoute adminOnly />,
-    children: [
-      {
-        path: "/admin",
-        element: <AppShell />,
-        children: [
-          { index: true, element: <Navigate to="/admin/power-levels" replace /> },
-          { path: "power-levels", element: <PowerLevelAdminPage /> },
+          { path: "tournaments/:uuid/roster", element: <RosterBuilderPage /> },
+          { path: "tournaments/:uuid/round", element: <RoundBoardPage /> },
+          { path: "tournaments/:uuid/manage", element: <OwnerControlPanelPage /> },
         ],
       },
     ],

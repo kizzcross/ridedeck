@@ -22,6 +22,30 @@ def ensure_draft_version(banlist: Banlist) -> BanlistVersion:
 
 
 @transaction.atomic
+def import_entries(banlist: Banlist, entries: list[dict], *, replace: bool = False) -> BanlistVersion:
+    """Create card-level BanlistEntry rows from resolved import entries. Each is
+    {card: uuid, restriction_type, limit_value?}. `replace` clears existing
+    card entries first (groups are left untouched)."""
+    from apps.cards.models import Card
+    version = ensure_draft_version(banlist)
+    if replace:
+        version.entries.filter(card__isnull=False).delete()
+    seen: set[str] = set()
+    for e in entries:
+        card = Card.objects.filter(uuid=e.get("card")).first()
+        if not card or str(card.uuid) in seen:
+            continue
+        seen.add(str(card.uuid))
+        rt = e.get("restriction_type", RestrictionType.BANNED)
+        version.entries.filter(card=card).delete()  # one restriction per card
+        BanlistEntry.objects.create(
+            version=version, restriction_type=rt, card=card,
+            limit_value=e.get("limit_value") if rt == RestrictionType.LIMIT_TO_N else None,
+        )
+    return version
+
+
+@transaction.atomic
 def fork_banlist(banlist: Banlist, user) -> Banlist:
     from .choices import BanlistCategory
 

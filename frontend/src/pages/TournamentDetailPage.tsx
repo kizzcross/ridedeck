@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Crown, Lock, ListChecks, Play, Trophy, Trash2, UserPlus, Swords } from "lucide-react";
+import { Check, Crown, Lock, ListChecks, Layers, Play, Trophy, Trash2, UserPlus, Swords } from "lucide-react";
 import { tournamentsApi, type Match } from "@/api/tournaments";
 import { decksApi } from "@/api/decks";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { Badge, Button, ConfirmDeleteDialog, Panel, Skeleton, useToast } from "@/components/ui";
 import { BracketView } from "@/features/tournaments/BracketView";
+import { RosterStandings } from "@/features/championship/RosterStandings";
 import { CommentThread } from "@/components/CommentThread";
 import { apiErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -31,7 +32,12 @@ export function TournamentDetailPage() {
     refetchInterval: t?.status === "running" ? 8000 : false,
   });
   const { data: standings } = useQuery({
-    queryKey: ["t-standings", uuid], queryFn: () => tournamentsApi.standings(uuid), enabled: tab === "standings",
+    queryKey: ["t-standings", uuid], queryFn: () => tournamentsApi.standings(uuid),
+    enabled: tab === "standings" && t?.kind !== "roster",
+  });
+  const { data: rosterStandings } = useQuery({
+    queryKey: ["t-roster-standings", uuid], queryFn: () => tournamentsApi.rosterStandings(uuid),
+    enabled: tab === "standings" && t?.kind === "roster",
   });
   const { data: regs } = useQuery({
     queryKey: ["t-regs", uuid], queryFn: () => tournamentsApi.registrations(uuid), enabled: !!t?.is_organizer,
@@ -101,7 +107,6 @@ export function TournamentDetailPage() {
           <span className="flex items-center gap-1.5 text-sm"><Avatar avatarKey={t.organizer.avatar_key} username={t.organizer.username} size={22} /> {t.organizer.username}</span>
           <span className="text-sm text-[var(--color-ink-muted)]">{t.participant_count}/{t.max_participants} jogadores · Bo{t.best_of}</span>
           {t.banlist_uuid && <Badge tone="official">Banlist v{t.banlist_version_number ?? "?"}</Badge>}
-          {t.power_policy && <Badge tone="warning">Power: {t.power_policy.kind}</Badge>}
 
           {/* Player actions */}
           <div className="ml-auto flex flex-wrap gap-2">
@@ -125,7 +130,10 @@ export function TournamentDetailPage() {
           {t.status === "draft" && <Button size="sm" onClick={() => act.mutate({ verb: "open-registration" })}><Play className="h-4 w-4" /> Abrir inscrições</Button>}
           {["registration"].includes(t.status) && <Button size="sm" onClick={() => act.mutate({ verb: "lock" })}><Lock className="h-4 w-4" /> Travar inscrições</Button>}
           {["locked", "check_in"].includes(t.status) && (
-            <Button size="sm" onClick={() => act.mutate({ verb: "generate-bracket" })}><Swords className="h-4 w-4" /> Gerar bracket</Button>
+            <Button size="sm" onClick={() => act.mutate({ verb: "generate-bracket" })}><Swords className="h-4 w-4" /> {t.kind === "roster" ? "Iniciar campeonato" : "Gerar bracket"}</Button>
+          )}
+          {t.kind === "roster" && (
+            <Link to={`/app/tournaments/${uuid}/manage`}><Button size="sm" variant="secondary"><ListChecks className="h-4 w-4" /> Painel do organizador</Button></Link>
           )}
           {t.invite_code && <Badge tone="neutral">convite: {t.invite_code}</Badge>}
           <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirmDelete(true)}>
@@ -134,8 +142,30 @@ export function TournamentDetailPage() {
         </Panel>
       )}
 
-      {/* Deck submission */}
-      {myReg && t.requires_decklist && ["registration", "check_in", "locked"].includes(t.status) && (
+      {/* Roster championship: link to the roster builder */}
+      {myReg && t.kind === "roster" && (
+        <Panel className="flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-sm uppercase text-[var(--color-ink-muted)]">Seu roster</h3>
+            <p className="text-xs text-[var(--color-ink-subtle)]">
+              {t.decks_per_player} decks · cap {t.power_cap} de poder · {t.ace_enabled ? "Ace ativado" : "sem Ace"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link to={`/app/tournaments/${uuid}/roster`}>
+              <Button variant={t.status === "running" ? "secondary" : "primary"}><Layers className="h-4 w-4" /> Montar roster</Button>
+            </Link>
+            {["running", "finished"].includes(t.status) && (
+              <Link to={`/app/tournaments/${uuid}/round`}>
+                <Button><Swords className="h-4 w-4" /> Rodada ao vivo</Button>
+              </Link>
+            )}
+          </div>
+        </Panel>
+      )}
+
+      {/* Deck submission (standard mode) */}
+      {myReg && t.kind !== "roster" && t.requires_decklist && ["registration", "check_in", "locked"].includes(t.status) && (
         <Panel className="p-4">
           <h3 className="font-display mb-2 text-sm uppercase text-[var(--color-ink-muted)]">Submeter deck</h3>
           <div className="flex flex-wrap gap-2">
@@ -218,7 +248,11 @@ export function TournamentDetailPage() {
         </Panel>
       )}
 
-      {tab === "standings" && (
+      {tab === "standings" && t.kind === "roster" && (
+        <RosterStandings rows={rosterStandings ?? []} aceTiebreak={t.ace_enabled && t.ace_rule === "tiebreak_wins"} />
+      )}
+
+      {tab === "standings" && t.kind !== "roster" && (
         <Panel className="p-4">
           {(standings?.length ?? 0) === 0 ? (
             <p className="text-sm text-[var(--color-ink-subtle)]">Sem standings ainda.</p>

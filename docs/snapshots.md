@@ -7,11 +7,13 @@ mudanças futuras **nunca** alterem retroativamente algo já decidido.
 
 | Snapshot | Modelo | Quando é criado | Congela |
 |----------|--------|-----------------|---------|
-| Regras do torneio | `TournamentRulesSnapshot` | No **lock** das inscrições | Versão das regras de formato, banlist + versão, política de power level, custom rules, Bo-N — com `content_hash`. |
-| Deck submetido | `TournamentDeckSubmission` + `DeckSnapshot` | Na **submissão** | Lista exata de cartas (por identidade + zona + qtd), com `content_hash`, e o resultado da validação daquele momento. |
+| Regras do torneio | `TournamentRulesSnapshot` | No **lock** das inscrições | Versão das regras de formato, banlist + versão, custom rules, Bo-N — com `content_hash`. |
+| Deck submetido (clássico) | `TournamentDeckSubmission` + `DeckSnapshot` | Na **submissão** | Lista exata de cartas (por identidade + zona + qtd), com `content_hash`, e o resultado da validação daquele momento. |
+| **Deck do roster** (campeonato) | `RosterDeck.snapshot` → `DeckSnapshot` | No **lock** dos rosters | Lista de cada deck do time **+ a nota de força** atribuída pelo dono; o roster fica `locked`. |
+| Sequência de sorteio | `RosterDeckSequence` | No lock (modo `predetermined_order`) | A ordem em que os decks vão aparecer, cíclica — imutável. |
 | Deck (genérico) | `DeckSnapshot` | Sob demanda (`/decks/{id}/snapshot/`) | Entradas do deck + hash. |
 | Banlist | `BanlistVersion` | A cada versão publicada | Entradas + grupos de restrição. |
-| Power level | `CardPowerLevelHistory` | A cada alteração | Valor anterior/novo, admin, justificativa, versão, origem. |
+| Sorteio de deck | `DeckDrawLog` | A cada sorteio | Elegíveis, resultado, regra, rodada, intervenção admin — **append-only, nunca editado**. |
 
 ## Hash de conteúdo
 
@@ -37,5 +39,7 @@ organizador trava → TournamentRulesSnapshot   │  congela regras/banlist/powe
 check-in → seeding → bracket → resultados
 ```
 
-Uma mudança futura na banlist global, no power level ou nas regras de formato
-não afeta um torneio já travado — ele usa seus próprios snapshots.
+Uma mudança futura na banlist global ou nas regras de formato não afeta um torneio
+já travado — ele usa seus próprios snapshots. No **modo campeonato**, editar ou
+apagar um deck de origem depois do lock também não muda o time: cada `RosterDeck`
+usa seu `DeckSnapshot` congelado e a força atribuída pelo dono.

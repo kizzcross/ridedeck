@@ -75,7 +75,8 @@ class DeckViewSet(viewsets.ModelViewSet):
 
     # Actions that mutate the deck itself require ownership; social actions
     # (fork/like/favorite/comment) only require that the deck be visible.
-    OWNER_ACTIONS = {"update", "partial_update", "destroy", "entry", "publish", "snapshot"}
+    OWNER_ACTIONS = {"update", "partial_update", "destroy", "entry", "publish",
+                     "snapshot", "import_list"}
 
     def get_object(self):
         obj = super().get_object()
@@ -97,6 +98,32 @@ class DeckViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.soft_delete()
+
+    # --- Import from a text list -----------------------------------------
+    @action(detail=False, methods=["post"], url_path="import-preview",
+            permission_classes=[IsAuthenticated])
+    def import_preview(self, request):
+        """Parse a pasted deck list and resolve each line to a card (fuzzy,
+        tolerant of typos). Read-only preview — no deck is touched."""
+        from apps.cards.importer import resolve_text
+        from apps.cards.serializers import serialize_resolved_lines
+        text = request.data.get("text", "")
+        default_zone = request.data.get("default_zone", "main_deck")
+        resolved = resolve_text(text, default_zone=default_zone)
+        return Response({"lines": serialize_resolved_lines(resolved)})
+
+    @action(detail=True, methods=["post"], url_path="import-list")
+    def import_list(self, request, uuid=None):
+        """Apply resolved import lines to the deck. Body: {lines:[{card, zone,
+        quantity}], replace}. `card` = card uuid."""
+        from .services import import_entries
+        deck = self.get_object()
+        lines = request.data.get("lines", [])
+        replace = bool(request.data.get("replace", False))
+        version = import_entries(deck, lines, replace=replace)
+        deck.save(update_fields=["updated_at"])
+        version.refresh_from_db()
+        return Response(DeckVersionSerializer(version).data)
 
     # --- Builder actions --------------------------------------------------
     @extend_schema(request=SetEntrySerializer, responses=DeckVersionSerializer)
@@ -142,15 +169,6 @@ class DeckViewSet(viewsets.ModelViewSet):
         from apps.validation.service import validate_deck_version
         return Response(validate_deck_version(version, owned_map=owned,
                                               banlist_version=banlist_version))
-
-    @action(detail=True, methods=["get"], url_path="power")
-    def power(self, request, uuid=None):
-        """Deck power stats (max, weighted avg, distribution, top contributors)."""
-        from apps.powerlevel.services import deck_power_stats
-
-        deck = self.get_object()
-        version = ensure_working_version(deck)
-        return Response(deck_power_stats(version, deck.format_code))
 
     @action(detail=True, methods=["get"], url_path="collection-report",
             permission_classes=[IsAuthenticated])

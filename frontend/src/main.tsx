@@ -5,6 +5,7 @@ import "./styles/index.css";
 import { router } from "./app/router";
 import { QueryProvider } from "./app/query";
 import { ThemeProvider } from "./app/theme";
+import { MotionProvider } from "./app/MotionProvider";
 import { ToastProvider } from "./components/ui";
 import { useAuth } from "./hooks/useAuth";
 
@@ -16,11 +17,13 @@ function Root() {
 
   return (
     <ThemeProvider>
-      <QueryProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </QueryProvider>
+      <MotionProvider>
+        <QueryProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </QueryProvider>
+      </MotionProvider>
     </ThemeProvider>
   );
 }

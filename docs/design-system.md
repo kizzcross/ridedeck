@@ -56,10 +56,38 @@ Cada token existe em dark (default) e é remapeado em `html.light`.
 | `Toast` | `success/error/info/warning`, `aria-live`, ícone + cor. |
 | `Skeleton` | Shimmer para loading. |
 
+## 4b. Componentes de campeonato
+
+[`frontend/src/features/championship/`](../frontend/src/features/championship/) —
+camada premium do modo campeonato (usa `framer-motion`, ver §4c):
+
+| Componente | Notas |
+|------------|-------|
+| `DeckCard` | Card de deck grande (variantes `sm/md/lg/ceremony`): arte, nome, ride line, `PowerBadge`, `AceSeal`, validade; hover com profundidade. |
+| `CapMeter` | Medidor de força do time — **nunca depende só de cor**: barra + número + ícone + texto (`10/15`, `15/15`, `17/15` inválido com explicação). |
+| `PowerBadge` / `AceSeal` | Nota de força; selo de Ace (coroa) — `corner` (sobre o card) ou `chip`. |
+| `VersusBoard` | Confronto A×B; deck do adversário **virado para baixo** até o reveal simultâneo. |
+| `AceCeremony` | Escolha do Ace em tela cheia (dim + brilho + partículas + "Este será o seu Ace"). |
+| `DrawAnimator` | Sorteio: card-backs embaralham → o deck vai ao centro e revela (flourish especial se for o Ace). |
+| `RosterStandings` | Classificação rica (taxa por deck, vitórias com Ace, penalidades). |
+| `Explainer` | Ajuda em **linguagem natural** dispensável ("Entendi, não mostrar de novo"). |
+
+## 4c. Motion & animações
+
+- **`framer-motion`** para coreografias, atrás de um **`MotionProvider`**
+  ([`app/MotionProvider.tsx`](../frontend/src/app/MotionProvider.tsx)) que combina
+  `prefers-reduced-motion` (SO) com um **toggle do usuário** e configura o
+  `MotionConfig` (`reducedMotion: "always"`) — toda animação degrada para um estado
+  estático.
+- Botão **reduzir animações** no cabeçalho (`ReduceMotionToggle`).
+- Rotas pesadas de animação são **code-split** (lazy) para não pesar o bundle base.
+
 ## 5. Acessibilidade
 
 - Foco visível de 3px âmbar em tudo interativo.
-- Estados de erro nunca dependem só de cor (ícone + texto + `aria`).
+- Estados de erro/validação nunca dependem só de cor (ícone + texto + `aria`) — o
+  `CapMeter` do campeonato segue a mesma regra.
+- **`prefers-reduced-motion`** respeitado globalmente (+ toggle do usuário).
 - Alvos ≥ 32px; navegação por teclado; `aria-label` em ícones-botão.
 
 ---

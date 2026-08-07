@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from apps.formats.models import GameFormat
-from apps.powerlevel.services import power_map
 
 from .engine import DeckLine, ValidationContext, run_engine
 
@@ -23,7 +22,7 @@ def build_lines(version) -> list[DeckLine]:
     ]
 
 
-def validate_deck_version(version, *, owned_map=None, power_policy=None, banlist_version=None,
+def validate_deck_version(version, *, owned_map=None, banlist_version=None,
                           reference_date=None) -> dict:
     deck = version.deck
     fmt = GameFormat.objects.filter(code=deck.format_code).first()
@@ -33,8 +32,6 @@ def validate_deck_version(version, *, owned_map=None, power_policy=None, banlist
         lines=build_lines(version),
         format_code=deck.format_code,
         rule_version=rule_version,
-        power_map=power_map(deck.format_code),
-        power_policy=power_policy,
         banlist_version=banlist_version,
         owned_map=owned_map or {},
         reference_date=reference_date,

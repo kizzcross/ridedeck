@@ -1,8 +1,9 @@
 # RideDeck — plataforma competitiva de Cardfight!! Vanguard
 
 Plataforma web completa: catálogo de cartas, deck builder interativo, controle de
-coleção, publicação de decks, power level editorial, banlists (oficiais e da
-comunidade), torneios com brackets e validação automática de decks.
+coleção, publicação de decks, **nível de deck por estrelas**, banlists (oficiais e
+da comunidade), torneios com brackets, **modo campeonato por roster** (time de
+decks + cap de força + sorteio + Ace) e validação automática de decks.
 
 > Projeto de fã, **não afiliado à Bushiroad**. Em ambiente de desenvolvimento os
 > dados de cartas são fictícios/placeholder.
@@ -25,8 +26,8 @@ frontend (Vite/React)  ──HTTP/JSON──▶  backend (Django/DRF)  ──▶
 
 - Backend organizado por **domínios** em `backend/apps/*` (bounded contexts).
 - Permissões **sempre** no backend — nunca confiando em flags do frontend.
-- Regras de formato, banlist e power level ficam **no banco** e são **versionadas**.
-- Torneios guardam **snapshots imutáveis** (regras, banlist, power policy, deck submetido).
+- Regras de formato e banlist ficam **no banco** e são **versionadas**.
+- Torneios guardam **snapshots imutáveis** (regras, banlist, deck/roster submetido).
 
 ### Documentação
 
@@ -37,9 +38,11 @@ frontend (Vite/React)  ──HTTP/JSON──▶  backend (Django/DRF)  ──▶
 | [permissions-matrix.md](docs/permissions-matrix.md) | Matriz de permissões + 12 testes de aceitação |
 | [rule-engine.md](docs/rule-engine.md) | Motor de validação de decks (regras plugáveis) |
 | [snapshots.md](docs/snapshots.md) | Sistema de snapshots imutáveis + hash |
-| [design-system.md](docs/design-system.md) | Design system arcade + ícones de nation/clan |
+| [design-system.md](docs/design-system.md) | Design system arcade + motion + ícones de nation/clan |
+| [roster-championship.md](docs/roster-championship.md) | **Modo campeonato** (roster, cap, sorteio, Ace) — entidades, fluxos, endpoints |
 | [decisions-and-risks.md](docs/decisions-and-risks.md) | Decisões técnicas, riscos e próximos passos |
-| [roadmap.md](docs/roadmap.md) | Status das 9 fases |
+| [roadmap.md](docs/roadmap.md) | Status das fases |
+| [CHANGELOG.md](CHANGELOG.md) | Histórico de mudanças (v2.0) |
 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | Deploy no VPS (vanguard.kizzcross.com.br) |
 
 ## Subir tudo com Docker (recomendado)
@@ -107,8 +110,10 @@ python manage.py create_platform_admin voce@exemplo.com --username voce
 # (cria se não existir, promove se já existir)
 ```
 
-Somente Platform Admins podem definir/editar power level, publicar banlists
-oficiais e alterar regras de formato.
+Somente Platform Admins podem publicar banlists oficiais e alterar regras de
+formato. (A força dos decks em um **campeonato** é definida pelo **dono daquele
+torneio**, não por um Platform Admin — ver
+[roster-championship.md](docs/roster-championship.md).)
 
 ## Testes
 
@@ -174,8 +179,13 @@ O deck builder (`/app/decks`) é o centro da experiência:
 - Zonas **Main / Ride / G**, controles de quantidade `− n +`, remover.
 - **Autosave** por alteração (cada mudança persiste), **undo/redo** (Ctrl+Z / Ctrl+Shift+Z).
 - Estatísticas ao vivo (curva de grade, total, triggers) e **validação em tempo real**
-  (contagem por zona, limite de 4 cópias por identidade) — validação *básica* na Fase 3;
-  o motor completo com banlist + power level chega na Fase 5.
+  (contagem por zona, limite de 4 cópias por identidade, banlist). O dono do deck
+  também define o **nível do deck (1–5 estrelas)** — usado como sugestão de força
+  nos campeonatos.
+- **Importar por lista de texto** (botão *Importar*): aceita vários formatos
+  (`4x Nome`, `Nome x4`, número da carta, CSV, cabeçalhos de zona…) e faz **match
+  fuzzy** que corrige typos, com prévia pra revisar antes de aplicar. O mesmo vale
+  para **banlists**.
 - Visibilidade **private / unlisted / public**, publicação e **fork** (cópia com auditoria).
 - **Snapshot** imutável com hash (base para submissão em torneios na Fase 7).
 
@@ -192,6 +202,25 @@ Endpoints: `/api/v1/decks/`, `/decks/{uuid}/entry|validate|publish|fork|snapshot
 
 Endpoints: `/api/v1/collection/`, `/collection/set|owned-map|summary/`, `/wishlist/`, `/trade/`,
 `/decks/{uuid}/collection-report/`.
+
+## Modo Campeonato (roster / cap / sorteio / Ace)
+
+Um tipo de torneio (`kind="roster"`) que coexiste com os brackets clássicos. Cada
+jogador inscreve um **time de decks** dentro de um **limite de força** (definido
+pelo dono do torneio); a cada rodada usa **um** deck (escolhido ou sorteado), com
+**Ace Deck** opcional. Cada partida continua 1 deck vs 1 deck — o roster só decide
+*quais* decks o jogador pode usar.
+
+- Criação por **wizard** com presets (Power Rotation, Ace Challenge, Random Two,
+  Full Random) e explicações em **linguagem natural** dispensáveis.
+- 6 modos de sorteio (rodízio, sem repetir seguido, livre, ordem fixa, escolhe-1-de-N,
+  manual secreto) com **reveal simultâneo** e sorteio **auditado** (`DeckDrawLog`).
+- Pontos / mata-mata / **híbrido**; classificação com taxa por deck, vitórias com
+  Ace e penalidades; **painel do organizador** (força inline, sorteios, disputas).
+- **Overlay de transmissão** (`/overlay/:uuid`), cerimônia do Ace, animação de
+  sorteio, e **reduzir animações** (`prefers-reduced-motion`).
+
+Detalhes completos: [`docs/roster-championship.md`](docs/roster-championship.md).
 
 ## PWA (instalável + offline)
 

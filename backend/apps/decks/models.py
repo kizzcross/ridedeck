@@ -7,6 +7,7 @@ copy limits, banlist and power level operate on the identity — while carrying 
 (Phase 7) freeze them immutably.
 """
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from apps.common.models import BaseModel, SoftDeleteModel
@@ -30,6 +31,14 @@ class Deck(BaseModel, SoftDeleteModel):
     format_code = models.CharField(max_length=32, default="standard", db_index=True)
     visibility = models.CharField(max_length=12, choices=Visibility.choices,
                                   default=Visibility.PRIVATE, db_index=True)
+
+    # Owner-chosen deck strength (1–5). Replaces editorial per-card power level and
+    # is the budget unit for Power Pool tournaments. Nullable = not rated yet.
+    power_stars = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="Força do deck escolhida pelo dono (1–5).",
+    )
 
     nation_focus = models.CharField(max_length=32, blank=True)
     clan_focus = models.CharField(max_length=64, blank=True)

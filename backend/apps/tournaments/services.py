@@ -109,9 +109,6 @@ def build_rules_snapshot(tournament: Tournament) -> TournamentRulesSnapshot:
         "format_code": tournament.format_code,
         "format_rules_version": rule_version.version if rule_version else None,
         "banlist": banlist_payload,
-        "power_policy": {"kind": tournament.power_policy.kind,
-                         "config": tournament.power_policy.config}
-        if tournament.power_policy else None,
         "custom_rules": tournament.custom_rules,
         "best_of": tournament.best_of,
         "frozen_at": timezone.now().isoformat(),
@@ -127,8 +124,13 @@ def build_rules_snapshot(tournament: Tournament) -> TournamentRulesSnapshot:
 @transaction.atomic
 def lock_registration(tournament: Tournament, actor) -> Tournament:
     build_rules_snapshot(tournament)
-    # Lock every submission so later deck edits can't change what was submitted.
-    TournamentDeckSubmission.objects.filter(tournament=tournament).update(locked=True)
+    if tournament.is_roster:
+        # Roster mode: freeze each roster deck's snapshot + power.
+        from .roster import lock_rosters
+        lock_rosters(tournament, actor)
+    else:
+        # Lock every submission so later deck edits can't change what was submitted.
+        TournamentDeckSubmission.objects.filter(tournament=tournament).update(locked=True)
     tournament.status = TournamentStatus.CHECK_IN if tournament.requires_checkin \
         else TournamentStatus.LOCKED
     tournament.save(update_fields=["status"])
@@ -150,6 +152,38 @@ def disqualify(participant: TournamentParticipant, actor, reason=""):
           f"{participant.user.username} desclassificado", reason=reason)
 
 
+@transaction.atomic
+def apply_penalty(participant, kind, points, reason, issued_by):
+    """Record a penalty. `points` is a delta on the standings total (negative =
+    deduction). A disqualification penalty also drops the participant."""
+    from .choices import PenaltyKind
+    from .models import TournamentPenalty
+    pen = TournamentPenalty.objects.create(
+        participant=participant, kind=kind, points=points, reason=reason, issued_by=issued_by)
+    if kind == PenaltyKind.DISQUALIFICATION:
+        disqualify(participant, issued_by, reason=reason)
+    audit(participant.tournament, "penalty_applied", issued_by,
+          f"{participant.user.username}: {kind} ({points} pts)", reason=reason)
+    _recompute_standings(participant.tournament)
+    return pen
+
+
+@transaction.atomic
+def resolve_dispute(match, resolver, resolution="", score_a=None, score_b=None):
+    """Organizer resolves an open dispute, optionally correcting the result."""
+    from .models import MatchDispute
+    MatchDispute.objects.filter(match=match, resolved=False).update(
+        resolved=True, resolution=resolution, resolved_by=resolver)
+    if score_a is not None and score_b is not None:
+        organizer_set_result(str(match.uuid), resolver, score_a, score_b)
+    else:
+        match.state = MatchState.REPORTED if match.reported_by_id else MatchState.PENDING
+        match.save(update_fields=["state"])
+    audit(match.round.stage.tournament, "dispute_resolved", resolver,
+          f"Disputa resolvida na partida {match.position}", resolution=resolution)
+    return match
+
+
 # --- Deck submission (immutable) -----------------------------------------
 @transaction.atomic
 def submit_deck(tournament: Tournament, participant: TournamentParticipant, deck, actor) \
@@ -161,8 +195,7 @@ def submit_deck(tournament: Tournament, participant: TournamentParticipant, deck
     version = ensure_working_version(deck)
     entries = _serialize_entries(version)
     banlist_version = tournament.banlist.current_version if tournament.banlist else None
-    result = validate_deck_version(version, power_policy=tournament.power_policy,
-                                   banlist_version=banlist_version)
+    result = validate_deck_version(version, banlist_version=banlist_version)
     payload = {"entries": entries, "format": deck.format_code,
                "deck_title": deck.title, "submitted_at": timezone.now().isoformat()}
     content_hash = _hash(payload["entries"])
@@ -211,6 +244,37 @@ def seed_participants(tournament: Tournament, order: list[str] | None = None):
         if p.seed != i:
             p.seed = i
             p.save(update_fields=["seed"])
+
+
+@transaction.atomic
+def apply_seed_source(tournament: Tournament):
+    """Set participant seeds according to the tournament's seed_source
+    (random / manual / platform ranking). Manual keeps organizer-set seeds."""
+    import secrets
+
+    from .choices import SeedSource, TournamentStatus
+
+    src = tournament.seed_source
+    participants = list(tournament.participants.all())
+    if src == SeedSource.MANUAL:
+        return  # keep existing seeds / organizer ordering
+
+    if src == SeedSource.PLATFORM_RANKING:
+        # Rank by past performance: total wins across the player's finished events.
+        wins_by_user: dict[int, int] = {}
+        for row in (TournamentParticipant.objects
+                    .filter(tournament__status=TournamentStatus.FINISHED)
+                    .values("user_id", "wins")):
+            wins_by_user[row["user_id"]] = wins_by_user.get(row["user_id"], 0) + row["wins"]
+        participants.sort(key=lambda p: (-wins_by_user.get(p.user_id, 0), p.created_at))
+    else:  # RANDOM
+        for i in range(len(participants) - 1, 0, -1):
+            j = secrets.randbelow(i + 1)
+            participants[i], participants[j] = participants[j], participants[i]
+
+    for i, p in enumerate(participants, start=1):
+        p.seed = i
+        p.save(update_fields=["seed"])
 
 
 @transaction.atomic
@@ -366,6 +430,12 @@ def _finalize_match(match, winner, actor, *, state=MatchState.DONE, is_bye=False
 
     _maybe_complete_round(match.round)
     _recompute_standings(match.round.stage.tournament)
+
+    # Roster mode: as new rounds activate, draw each participant's deck (idempotent).
+    tournament = match.round.stage.tournament
+    if tournament.is_roster and tournament.draw_timing in ("auto_round_start", "after_pairing"):
+        from .selection import run_active_round_draws
+        run_active_round_draws(tournament, None)
 
 
 def _maybe_complete_round(round_obj):

@@ -22,8 +22,121 @@ export interface TournamentListItem {
   max_participants: number;
   organizer: UserMini;
   participant_count: number;
+  kind: "standard" | "roster";
+  format_kind: "points" | "bracket" | "hybrid";
 }
-export interface TournamentDetail extends TournamentListItem {
+
+export type DeckSelectionMode =
+  | "manual" | "random_free" | "random_no_consecutive" | "random_rotation"
+  | "predetermined_order" | "choose_from_random";
+export type AceRule =
+  | "manual_once" | "replace_draw" | "weighted_random" | "extra_in_rotation"
+  | "tiebreak_wins" | "visual_only";
+
+export interface RosterConfig {
+  decks_per_player: number;
+  power_cap: number;
+  min_deck_power: number | null;
+  max_deck_power: number | null;
+  deck_selection_mode: DeckSelectionMode;
+  random_options_count: number;
+  roster_visibility: "open" | "partial" | "closed";
+  ace_enabled: boolean;
+  ace_rule: AceRule;
+  ace_reveal: "public" | "hidden_until_first_use";
+  ace_required: boolean;
+}
+
+export interface RosterDeck {
+  uuid: string;
+  deck_uuid: string | null;
+  label: string;
+  power: number | null;
+  suggested_power: number | null;
+  is_ace: boolean;
+  banlist_valid: boolean;
+  is_valid: boolean;
+  slot: number;
+  order_index: number;
+  locked: boolean;
+  cover_image: string | null;
+}
+export type RosterStatus = "draft" | "valid" | "invalid" | "confirmed" | "locked";
+export interface Roster {
+  uuid: string;
+  participant: Participant;
+  status: RosterStatus;
+  power_used: number;
+  is_over_cap: boolean;
+  power_cap: number;
+  decks_per_player: number;
+  confirmed_at: string | null;
+  decks: RosterDeck[];
+}
+export interface TournamentPreset {
+  code: string;
+  name: string;
+  description: string;
+  config: Record<string, unknown>;
+}
+
+export interface SelectionDeck {
+  uuid: string;
+  label: string;
+  is_ace: boolean;
+  cover_image: string | null;
+}
+export interface RosterMatchSelection {
+  participant_uuid: string;
+  method: string;
+  confirmed: boolean;
+  revealed: boolean;
+  is_ace_used: boolean;
+  deck: SelectionDeck | null;
+  options: SelectionDeck[];
+}
+export interface RosterMatch {
+  uuid: string;
+  position: number;
+  table_number: number | null;
+  state: "pending" | "reported" | "disputed" | "bye" | "done";
+  participant_a: Participant | null;
+  participant_b: Participant | null;
+  winner_uuid: string | null;
+  score_a: number;
+  score_b: number;
+  selections: RosterMatchSelection[];
+}
+export interface RosterRound {
+  uuid: string;
+  number: number;
+  name: string;
+  status: string;
+  matches: RosterMatch[];
+}
+
+export interface RosterDeckStat {
+  label: string;
+  is_ace: boolean;
+  power: number | null;
+  wins: number;
+  losses: number;
+  games: number;
+  win_rate: number | null;
+}
+export interface RosterStandingRow {
+  rank: number;
+  participant: UserMini;
+  points: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  ace_wins: number;
+  penalties: number;
+  decks: RosterDeckStat[];
+}
+
+export interface TournamentDetail extends TournamentListItem, RosterConfig {
   description: string;
   invite_code: string;
   timezone: string;
@@ -37,7 +150,6 @@ export interface TournamentDetail extends TournamentListItem {
   contact: string;
   banlist_uuid: string | null;
   banlist_version_number: number | null;
-  power_policy: { uuid: string; kind: string; name: string } | null;
   is_organizer: boolean;
   my_registration: { status: string } | null;
 }
@@ -155,6 +267,79 @@ export const tournamentsApi = {
   },
   async mySubmission(uuid: string) {
     const { data } = await api.get<Submission | { submission: null }>(`/tournaments/${uuid}/my-submission/`);
+    return data;
+  },
+  // Roster championship
+  async presets() {
+    const { data } = await api.get<TournamentPreset[]>(`/tournaments/presets/`);
+    return data;
+  },
+  async myRoster(uuid: string) {
+    const { data } = await api.get<Roster | { roster: null }>(`/tournaments/${uuid}/my-roster/`);
+    return data;
+  },
+  async rosters(uuid: string) {
+    const { data } = await api.get<Roster[]>(`/tournaments/${uuid}/rosters/`);
+    return data;
+  },
+  async addRosterDeck(uuid: string, deck: string) {
+    const { data } = await api.post<Roster>(`/tournaments/${uuid}/add-roster-deck/`, { deck });
+    return data;
+  },
+  async removeRosterDeck(uuid: string, roster_deck: string) {
+    const { data } = await api.post<Roster>(`/tournaments/${uuid}/remove-roster-deck/`, { roster_deck });
+    return data;
+  },
+  async setAce(uuid: string, roster_deck: string | null) {
+    const { data } = await api.post<Roster>(`/tournaments/${uuid}/set-ace/`, { roster_deck });
+    return data;
+  },
+  async confirmRoster(uuid: string) {
+    const { data } = await api.post<Roster>(`/tournaments/${uuid}/confirm-roster/`);
+    return data;
+  },
+  async setDeckPower(uuid: string, roster_deck: string, power: number | null) {
+    const { data } = await api.post<Roster>(`/tournaments/${uuid}/set-deck-power/`, { roster_deck, power });
+    return data;
+  },
+  async rosterRounds(uuid: string) {
+    const { data } = await api.get<RosterRound[]>(`/tournaments/${uuid}/roster-rounds/`);
+    return data;
+  },
+  async rosterStandings(uuid: string) {
+    const { data } = await api.get<RosterStandingRow[]>(`/tournaments/${uuid}/roster-standings/`);
+    return data;
+  },
+  async runDraws(uuid: string, redraw = false) {
+    const { data } = await api.post(`/tournaments/${uuid}/run-draws/`, { redraw });
+    return data;
+  },
+  async pickDeck(matchUuid: string, roster_deck: string) {
+    const { data } = await api.post(`/matches/${matchUuid}/pick-deck/`, { roster_deck });
+    return data;
+  },
+  async confirmSelection(matchUuid: string) {
+    const { data } = await api.post(`/matches/${matchUuid}/confirm-selection/`);
+    return data;
+  },
+  async useAce(matchUuid: string) {
+    const { data } = await api.post(`/matches/${matchUuid}/use-ace/`);
+    return data;
+  },
+  async applyPenalty(uuid: string, body: { participant: string; kind: string; points: number; reason: string }) {
+    const { data } = await api.post(`/tournaments/${uuid}/apply-penalty/`, body);
+    return data;
+  },
+  async penalties(uuid: string) {
+    const { data } = await api.get<{ uuid: string; participant: string; kind: string; points: number; reason: string; created_at: string }[]>(`/tournaments/${uuid}/penalties/`);
+    return data;
+  },
+  async resolveDispute(matchUuid: string, resolution: string, score_a?: number, score_b?: number) {
+    const { data } = await api.post(`/matches/${matchUuid}/resolve-dispute/`, { resolution, score_a, score_b });
+    return data;
+  },
+  async disputeMatch(matchUuid: string, reason: string) {
+    const { data } = await api.post(`/matches/${matchUuid}/dispute/`, { reason });
     return data;
   },
   // Match actions

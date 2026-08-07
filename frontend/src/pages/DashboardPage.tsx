@@ -208,10 +208,9 @@ export function DashboardPage() {
             <h3 className="font-display text-lg">Ferramentas do admin</h3>
           </div>
           <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-            Power levels, banlists oficiais, sincronização de catálogo e auditoria.
+            Banlists oficiais, sincronização de catálogo e auditoria.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link to="/admin/power-levels"><Button variant="secondary" size="sm">Power levels</Button></Link>
             <Link to="/app/banlists"><Button variant="ghost" size="sm">Banlists</Button></Link>
           </div>
         </Panel>

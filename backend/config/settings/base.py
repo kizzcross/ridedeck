@@ -42,6 +42,9 @@ LOCAL_APPS = [
     "apps.cards",
     "apps.collection",
     "apps.formats",
+    # Editorial card power level was removed in v2.0. The app is kept as an empty
+    # shell (no models/views) only so the historical migration graph stays valid
+    # (tournaments.0001 referenced it). Do not add code here.
     "apps.powerlevel",
     "apps.banlists",
     "apps.decks",
@@ -169,8 +172,8 @@ SIMPLE_JWT = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "RideDeck API",
     "DESCRIPTION": "Competitive Cardfight!! Vanguard platform — catalog, deck builder, "
-    "collection, power level, banlists, tournaments.",
-    "VERSION": "1.0.0",
+    "collection, deck star ratings, banlists, tournaments and roster championships.",
+    "VERSION": "2.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SCHEMA_PATH_PREFIX": "/api/v1",

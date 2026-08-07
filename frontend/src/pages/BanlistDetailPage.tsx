@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, GitFork, Info, Layers, Plus, Save, Settings, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { Ban, GitFork, Info, Layers, Plus, Save, Settings, ShieldCheck, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { banlistsApi, type BanlistDetail } from "@/api/banlists";
+import { ImportListModal } from "@/features/import/ImportListModal";
 import { cardsApi, type CardListItem } from "@/api/cards";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -237,6 +238,7 @@ export function BanlistDetailPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [restriction, setRestriction] = useState("banned");
+  const [importOpen, setImportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -303,6 +305,11 @@ export function BanlistDetailPage() {
             {user?.is_platform_admin && (
               <Button size="sm" onClick={() => makeOfficial.mutate()}>
                 <ShieldCheck className="h-4 w-4" /> {bl.is_official ? "Remover oficial" : "Tornar oficial"}
+              </Button>
+            )}
+            {bl.is_owner && (
+              <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)} title="Importar banlist por lista de texto">
+                <Upload className="h-4 w-4" /> Importar lista
               </Button>
             )}
             {bl.is_owner && (
@@ -450,6 +457,14 @@ export function BanlistDetailPage() {
       )}
 
       <CommentThread targetType="banlist" targetUuid={uuid} />
+
+      <ImportListModal
+        open={importOpen}
+        kind="banlist"
+        targetUuid={uuid}
+        onClose={() => setImportOpen(false)}
+        onApplied={refresh}
+      />
     </div>
   );
 }
